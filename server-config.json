@@ -1,0 +1,25 @@
+{
+  "ai": {
+    "endpoint": "https://api.openai.com/v1",
+    "apiKey": "",
+    "model": "gpt-4o-mini",
+    "temperature": 0.8
+  },
+  "image": {
+    "endpoint": "",
+    "apiKey": "",
+    "model": "flux-2-klein",
+    "size": "1024x1024"
+  },
+  "tts": {
+    "enabled": false,
+    "mode": "browser",
+    "endpoint": "https://api.openai.com/v1",
+    "apiKey": "",
+    "model": "tts-1",
+    "voice": "alloy",
+    "rate": 1,
+    "pitch": 1,
+    "autoPlay": false
+  }
+}
