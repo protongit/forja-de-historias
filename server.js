@@ -14,11 +14,37 @@ const DB_PATH = process.env.DB_PATH || resolve(__dirname, 'data', 'game.db')
 
 function loadConfig() {
   const configPath = resolve(CONFIG_PATH)
-  if (!existsSync(configPath)) {
-    console.error(`Config file not found: ${configPath}`)
-    process.exit(1)
+  let config
+  if (existsSync(configPath)) {
+    config = JSON.parse(readFileSync(configPath, 'utf-8'))
+  } else {
+    console.warn(`Config file not found: ${configPath}, using defaults + env vars`)
+    config = {
+      ai: { endpoint: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini', temperature: 0.8 },
+      image: { enabled: false, endpoint: '', apiKey: '', model: 'flux-2-klein', size: '1024x1024' },
+      tts: { enabled: false, mode: 'browser', endpoint: 'https://api.openai.com/v1', apiKey: '', model: 'tts-1', voice: 'alloy', rate: 1, pitch: 1, autoPlay: false },
+    }
   }
-  return JSON.parse(readFileSync(configPath, 'utf-8'))
+
+  config.ai.endpoint = process.env.AI_ENDPOINT || config.ai.endpoint
+  config.ai.model = process.env.AI_MODEL || config.ai.model
+  config.ai.temperature = parseFloat(process.env.AI_TEMPERATURE || String(config.ai.temperature))
+
+  if (process.env.IMAGE_ENABLED !== undefined) config.image.enabled = process.env.IMAGE_ENABLED === 'true'
+  if (process.env.IMAGE_ENDPOINT !== undefined) config.image.endpoint = process.env.IMAGE_ENDPOINT
+  if (process.env.IMAGE_MODEL !== undefined) config.image.model = process.env.IMAGE_MODEL
+  if (process.env.IMAGE_SIZE !== undefined) config.image.size = process.env.IMAGE_SIZE
+
+  if (process.env.TTS_ENABLED !== undefined) config.tts.enabled = process.env.TTS_ENABLED === 'true'
+  if (process.env.TTS_MODE !== undefined) config.tts.mode = process.env.TTS_MODE
+  config.tts.endpoint = process.env.TTS_ENDPOINT || config.tts.endpoint
+  config.tts.model = process.env.TTS_MODEL || config.tts.model
+  config.tts.voice = process.env.TTS_VOICE || config.tts.voice
+  config.tts.rate = parseFloat(process.env.TTS_RATE || String(config.tts.rate))
+  config.tts.pitch = parseFloat(process.env.TTS_PITCH || String(config.tts.pitch))
+  if (process.env.TTS_AUTO_PLAY !== undefined) config.tts.autoPlay = process.env.TTS_AUTO_PLAY === 'true'
+
+  return config
 }
 
 const serverConfig = loadConfig()

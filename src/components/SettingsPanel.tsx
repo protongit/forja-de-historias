@@ -386,6 +386,15 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
         <div className="border-t border-gray-700 pt-4">
           <h3 className="text-md font-semibold text-purple-400 mb-3">🎨 Generación de imágenes</h3>
           <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                type="checkbox"
+                checked={imageConfig.enabled}
+                onChange={(e) => updateImageConfig({ enabled: e.target.checked })}
+                className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-purple-600 focus:ring-purple-500"
+              />
+              <label className="text-sm text-gray-300">Habilitar generación de imágenes</label>
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">Endpoint</label>
               <input

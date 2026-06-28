@@ -436,6 +436,7 @@ function dispatchPhaseTransition(aiResponse: string, result: ProcessedResponse, 
 
 async function handlePendingImages(result: ProcessedResponse, imageConfig: GameState['imageConfig'], hostMessageId: string, _cleaned: string, dispatch: React.Dispatch<any>) {
   if (!result.pendingImages?.length) return
+  if (!imageConfig.enabled) return
 
   for (const { prompt } of result.pendingImages) {
     try {

@@ -13,7 +13,7 @@ Chatbot interactivo que dirige partidas de rol de mesa conversacionales usando I
 - **Voz (TTS)**: Narración por voz con diferentes emociones (narrador o API externa)
 - **Entrada por voz**: Transcripción de voz a texto para interactuar
 - **Adjuntos de imagen**: Envío de imágenes al GM para contexto visual
-- **Aventuras precargadas**: 3 aventuras listas para jugar sin configuración
+- **Aventuras precargadas**: 6 aventuras listas para jugar sin configuración
 - **Guardado y carga**: Sistema de guardado local con exportación/importación JSON
 - **Estadísticas**: Tracking de sesiones, XP, dados, tiempo jugado
 - **Leaderboard**: Tabla de clasificación de jugadores (requiere servidor)
@@ -26,7 +26,6 @@ Chatbot interactivo que dirige partidas de rol de mesa conversacionales usando I
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS |
 | Backend | Node.js, Express 5, better-sqlite3 |
 | IA | OpenAI API compatible (GPT-4o-mini por defecto) |
-| 3D | Three.js / React Three Fiber (dados animados) |
 | Despliegue | Docker multi-stage, nginx |
 
 ## Requisitos
@@ -69,25 +68,37 @@ El servidor escucha en el puerto 3000.
 
 ```bash
 docker build -t rol-conversacional .
-docker run -p 3000:3000 rol-conversacional
+docker run -p 3000:3000 \
+  -e OPENAI_API_KEY=sk-... \
+  -e AI_MODEL=gpt-4o-mini \
+  rol-conversacional
 ```
 
 ## Configuración del servidor
 
-El archivo `server-config.json` configura las API keys y modelos:
+El servidor se configura mediante el archivo `server-config.json` o mediante variables de entorno (estas últimas tienen prioridad).
+
+### server-config.json
 
 ```json
 {
   "ai": {
     "endpoint": "https://api.openai.com/v1",
-    "apiKey": "sk-...",
+    "apiKey": "",
     "model": "gpt-4o-mini",
     "temperature": 0.8
+  },
+  "image": {
+    "enabled": false,
+    "endpoint": "",
+    "apiKey": "",
+    "model": "flux-2-klein",
+    "size": "1024x1024"
   },
   "tts": {
     "enabled": false,
     "endpoint": "https://api.openai.com/v1",
-    "apiKey": "sk-...",
+    "apiKey": "",
     "model": "tts-1",
     "voice": "alloy",
     "rate": 1,
@@ -95,6 +106,32 @@ El archivo `server-config.json` configura las API keys y modelos:
   }
 }
 ```
+
+### Variables de entorno
+
+| Variable | Descripción | Default |
+|----------|-------------|---------|
+| `OPENAI_API_KEY` | API key para IA | — |
+| `OPENAI_TTS_API_KEY` | API key para TTS (si es distinta) | `OPENAI_API_KEY` |
+| `OPENAI_IMAGE_API_KEY` | API key para imágenes (si es distinta) | `OPENAI_API_KEY` |
+| `AI_ENDPOINT` | Endpoint de la API de IA | `https://api.openai.com/v1` |
+| `AI_MODEL` | Modelo de IA | `gpt-4o-mini` |
+| `AI_TEMPERATURE` | Temperatura del modelo | `0.8` |
+| `IMAGE_ENABLED` | Habilitar generación de imágenes (`true`/`false`) | `false` |
+| `IMAGE_ENDPOINT` | Endpoint de generación de imágenes | valor de `ai.endpoint` |
+| `IMAGE_MODEL` | Modelo de imágenes | `flux-2-klein` |
+| `IMAGE_SIZE` | Tamaño de imagen | `1024x1024` |
+| `TTS_ENABLED` | Habilitar TTS (`true`/`false`) | `false` |
+| `TTS_MODE` | Modo TTS (`browser`/`external`) | `browser` |
+| `TTS_ENDPOINT` | Endpoint TTS | `https://api.openai.com/v1` |
+| `TTS_MODEL` | Modelo TTS | `tts-1` |
+| `TTS_VOICE` | Voz TTS | `alloy` |
+| `TTS_RATE` | Velocidad de voz | `1` |
+| `TTS_PITCH` | Tono de voz | `1` |
+| `TTS_AUTO_PLAY` | Auto-reproducción (`true`/`false`) | `false` |
+| `PORT` | Puerto del servidor | `3000` |
+| `DB_PATH` | Ruta a la base de datos SQLite | `./data/game.db` |
+| `CONFIG_PATH` | Ruta al archivo de configuración | `./server-config.json` |
 
 Los usuarios invitados usan la API key del servidor. Los usuarios registrados pueden usar su propia API key.
 
@@ -115,7 +152,6 @@ El GM emite comandos bracket que el cliente parsea para gestionar el estado del 
 | `[ADD_COMPANION: nombre, desc, stats: ...]` | Añadir compañero |
 | `[JOURNAL_ENTRY: título, resumen, tipo]` | Entrada en diario |
 | `[TONE: emoción]` | Cambiar emoción de voz |
-| `[HINT]` | Usar una pista |
 | `[PLAYER_DAMAGE: N]` | Dañar al jugador |
 | `[PLAYER_HEAL: N]` | Curar al jugador |
 | `[SET_PLAYER_HP: hp, max]` | Establecer HP del jugador |
@@ -129,7 +165,7 @@ src/
 │   ├── ChatInterface.tsx    # Chat principal + IA
 │   ├── CombatPanel.tsx      # Panel de combate táctico
 │   ├── CharacterSheet.tsx   # Ficha de personaje
-│   ├── DiceRollOverlay.tsx  # Dados 3D animados
+│   ├── DiceRollOverlay.tsx  # Interfaz de tirada de dados
 │   ├── JournalPanel.tsx     # Diario de aventura
 │   └── ...
 ├── context/

@@ -32,6 +32,7 @@ const initialState: GameState = {
     temperature: 0.8,
   },
   imageConfig: {
+    enabled: false,
     endpoint: '',
     apiKey: '',
     model: 'flux-2-klein',

@@ -6,6 +6,7 @@
     "temperature": 0.8
   },
   "image": {
+    "enabled": false,
     "endpoint": "",
     "apiKey": "",
     "model": "flux-2-klein",

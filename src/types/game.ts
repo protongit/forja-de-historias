@@ -34,6 +34,7 @@ export interface AIConfig {
 }
 
 export interface ImageConfig {
+  enabled: boolean
   endpoint: string
   apiKey: string
   model: string

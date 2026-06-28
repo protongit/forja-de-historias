@@ -40,7 +40,7 @@ function buildStateFromPreset(preset: PresetAdventure, username: string): GameSt
   return {
     phase: 'playing',
     aiConfig: { endpoint: '', apiKey: '', model: '', temperature: 0.8 },
-    imageConfig: { endpoint: '', apiKey: '', model: 'flux-2-klein', size: '1024x1024' },
+    imageConfig: { enabled: false, endpoint: '', apiKey: '', model: 'flux-2-klein', size: '1024x1024' },
     tts: { enabled: false, mode: 'browser', endpoint: '', apiKey: '', model: '', voice: '', rate: 1, pitch: 1, autoPlay: false, emotion: preset.ttsEmotion },
     messages,
     character: preset.character,

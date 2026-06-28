@@ -10,7 +10,6 @@ Aplicación web de juego de rol conversacional con IA. Un Director de Juego (GM)
 |------|------------|
 | Frontend | React 19, TypeScript, Vite 8, Tailwind CSS 4 |
 | Backend | Node.js 22, Express 5, better-sqlite3 |
-| 3D | Three.js / React Three Fiber |
 | IA | OpenAI API compatible (GPT-4o-mini por defecto) |
 | Despliegue | Docker multi-stage, nginx |
 
@@ -60,3 +59,15 @@ Por cada modificación en archivos de código fuente (`.ts`, `.tsx`, `.js`, `.cs
 - **PATCH**: correcciones de errores o cambios menores
 
 La versión actual se muestra en la UI (junto al título en el header) y está definida en `src/version.ts` (importada de `package.json`).
+
+## Repositorio
+
+El repositorio oficial está en **GitHub**: `git@github.com:protongit/forja-de-historias.git`
+
+### Flujo de subida de cambios
+
+Cada vez que se modifique código fuente, además del versionado obligatorio:
+
+1. **Verificar** que no haya archivos grandes (`*.tar.gz`, `data/`, `node_modules/`, `dist/`) en el staging
+2. **Commit** con mensaje descriptivo incluyendo el número de versión
+3. **Push** a `origin main`
