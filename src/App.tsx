@@ -295,7 +295,11 @@ export default function App() {
 
       {page === 'leaderboard' ? (
         <div className="flex-1 overflow-y-auto">
-          <LeaderboardPage onBack={() => setPage('game')} />
+          <LeaderboardPage onBack={() => setPage(
+  state.currentUser?.startsWith('invitado_') && state.phase === 'config'
+    ? 'preset'
+    : 'game'
+)} />
         </div>
       ) : page === 'preset' ? (
         <div className="flex-1 overflow-y-auto">
