@@ -104,19 +104,33 @@ const GM_WORLD = `ESTADO DEL MUNDO:
   - campos válidos: location, relationship, isAlive
 - Para eliminar un NPC: [[REMOVE_NPC: nombre]]
 - Para cambiar la hora del día: [[SET_TIME: mañana|tarde|noche|amanecer|atardecer]]
-- Para cambiar el clima: [[SET_WEATHER: descripción del clima]]`
+- Para cambiar el clima: [[SET_WEATHER: descripción del clima]]
+
+DESCRIPCIONES DETALLADAS OBLIGATORIAS:
+- Cuando descubras una nueva ubicación con [[DISCOVER_LOCATION]], debes escribir un párrafo inmersivo de al menos 5-6 líneas describiendo el lugar con detalle sensorial: cómo se ve, qué sonidos se escuchan, qué olores hay, qué atmósfera se respira, cualquier elemento inusual o llamativo. El jugador debe poder imaginar el lugar con claridad.
+- Cuando añadas un NPC por primera vez con [[ADD_NPC]], debes proporcionar una descripción física completa: apariencia, complexión, ropa, accesorios, rasgos faciales distintivos, expresión, porte, gestos característicos. El jugador debe poder visualizar al personaje.`
 
 const GM_TTS = `TONO DEL NARRADOR (TTS):
 - Puedes cambiar la emoción de la voz del narrador durante la partida con: [[TONE: emoción]]
 - Emociones válidas: neutral, grave, alegre, epico, misterioso, susurro, terrorifico
 - Usa esto para dar énfasis a momentos clave (combates tensos, diálogos emotivos, etc.)`
 
+const GM_IMAGE_EVENTS = `IMÁGENES AUTOMÁTICAS:
+- El juego genera imágenes automáticamente para ilustrar tu narrativa. Debes usar marcadores [[IMAGE: descripción]] o [[IMG: descripción]] en las situaciones siguientes:
+
+  1. **Nuevas ubicaciones**: Cada vez que el jugador descubra un lugar nuevo, tras la descripción inmersiva del entorno, incluye [[IMAGE: descripción visual de la escena del lugar]]. La imagen debe mostrar el entorno, la atmósfera y los elementos más característicos del sitio.
+
+  2. **NPCs por primera vez**: Cada vez que presentes un personaje nuevo, tras su descripción física, incluye [[IMAGE: descripción visual del personaje]]. Puedes representar al personaje como retrato, de cuerpo completo, en acción, interactuando con el entorno, o en cualquier composición que mejor refleje su personalidad y rol en la historia. Tú decides la mejor representación.
+
+  3. **Momentos relevantes de la historia**: Cuando ocurra un evento narrativo importante, incluye [[IMAGE: descripción de la escena]]. Esto incluye: giros argumentales, revelaciones impactantes, momentos épicos, descubrimientos cruciales, clímax de tensión, derrotas de villanos, encuentros con criaturas extraordinarias, transformaciones, juramentos solemnes, y cualquier momento que merezca ser visualmente recordado. La imagen debe capturar la esencia del momento para darle impacto emocional.
+
+- La imagen aparecerá en el mismo mensaje, justo en el lugar donde insertes el marcador.
+- Si quieres varias imágenes en un mismo mensaje, puedes usar varios marcadores separados.`
+
 const GM_IMAGE = `GENERACIÓN DE IMÁGENES:
-- Puedes generar una imagen para ambientar una escena, mostrar un personaje o ilustrar un momento épico.
 - Para generar una imagen, incluye en tu respuesta: [[IMAGE: descripción detallada de la imagen]] (también puedes usar [[IMG: ...]])
 - Ejemplo: "De repente, ante ti aparece una figura imponente. [[IMAGE: un dragón rojo escupiendo fuego sobre un castillo medieval al atardecer]]"
-- La imagen aparecerá en el mismo mensaje, justo en el lugar donde insertes el marcador.
-- Usa descripciones detalladas en inglés para obtener mejores resultados.
+- Consulta las reglas de IMÁGENES AUTOMÁTICAS para saber cuándo debes generar imágenes obligatoriamente.
 - Si quieres varias imágenes en un mismo mensaje, puedes usar varios marcadores separados.`
 
 const GM_HP = `GESTIÓN DE HP DEL JUGADOR:
@@ -165,6 +179,8 @@ ${GM_JOURNAL}
 
 ${GM_TTS}
 
+${GM_IMAGE_EVENTS}
+
 ${GM_IMAGE}
 
 ${GM_HP}
@@ -205,6 +221,8 @@ ${GM_OBJECTIVES}
 ${GM_WORLD}
 
 ${GM_TTS}
+
+${GM_IMAGE_EVENTS}
 
 ${GM_IMAGE}
 
