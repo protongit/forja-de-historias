@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useGame } from '../context/GameContext'
 import { register, login, logout, deleteAccount, getCurrentUser } from '../services/authService'
 
-type AuthMode = 'login' | 'register'
+type AuthMode = 'guest' | 'login' | 'register'
 
 interface Props {
   requestConfirm?: (title: string, message: string, onConfirm: () => void, variant?: 'danger' | 'warning' | 'default', confirmLabel?: string, cancelLabel?: string) => void
@@ -10,7 +10,7 @@ interface Props {
 
 export default function AuthPanel({ requestConfirm }: Props) {
   const { state, dispatch } = useGame()
-  const [mode, setMode] = useState<AuthMode>('login')
+  const [mode, setMode] = useState<AuthMode>('guest')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -60,7 +60,11 @@ export default function AuthPanel({ requestConfirm }: Props) {
     )
   }
 
-  async function handleGuest() {
+  async function handleGuest(guestUsername: string) {
+    const name = guestUsername.trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9áéíóúñ_]/g, '_')
+      .slice(0, 20) || 'aventurero'
     try {
       const res = await fetch('/api/guest-config')
       if (res.ok) {
@@ -72,7 +76,7 @@ export default function AuthPanel({ requestConfirm }: Props) {
     } catch {
       // Fall back to defaults when server is not available
     }
-    dispatch({ type: 'SET_USER', username: `invitado_${Date.now().toString(36)}` })
+    dispatch({ type: 'SET_USER', username: `invitado_${name}` })
     // phase stays 'config' so App.tsx can redirect to preset picker
   }
 
@@ -105,68 +109,123 @@ export default function AuthPanel({ requestConfirm }: Props) {
     )
   }
 
+  const isGuestMode = mode === 'guest'
+
   return (
     <div className="bg-gray-800 rounded-xl p-4 shadow-lg max-w-sm mx-auto">
       <h2 className="text-lg font-bold text-white mb-4">
-        {mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
+        {isGuestMode ? 'Elige tu nombre' : mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
       </h2>
 
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <div>
-          <label className="block text-xs font-medium text-gray-400 mb-1">Usuario</label>
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-            placeholder="mi_usuario"
-            autoComplete="username"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-gray-400 mb-1">Clave</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-            placeholder="••••••"
-            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-          />
-        </div>
-
-        {error && (
-          <p className="text-red-400 text-xs bg-red-900/30 p-2 rounded">{error}</p>
-        )}
-
-        <button
-          type="submit"
-          disabled={loading || !username || !password}
-          className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition disabled:opacity-40 text-sm"
+      {isGuestMode ? (
+        <form
+          onSubmit={(e) => { e.preventDefault(); handleGuest(username) }}
+          className="space-y-3"
         >
-          {loading ? '...' : mode === 'login' ? 'Entrar' : 'Crear cuenta'}
-        </button>
-      </form>
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Nombre</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+              placeholder="Nombre"
+              autoComplete="off"
+            />
+          </div>
 
-      <p className="text-xs text-gray-500 text-center mt-3">
-        {mode === 'login' ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?'}{' '}
-        <button onClick={switchMode} className="text-indigo-400 hover:text-indigo-300 underline">
-          {mode === 'login' ? 'Regístrate' : 'Inicia sesión'}
-        </button>
-      </p>
+          <button
+            type="submit"
+            className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition text-sm"
+          >
+            Comenzar aventura
+          </button>
 
-      <div className="mt-4 pt-3 border-t border-gray-700">
-        <button
-          onClick={handleGuest}
-          className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded-lg transition"
-        >
-          Continuar como invitado
-        </button>
-        <p className="text-xs text-gray-600 text-center mt-2">
-          Los datos de invitado se guardan localmente sin clave.
-        </p>
-      </div>
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-700" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-gray-800 px-2 text-gray-500">o</span>
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-500 text-center">
+            ¿Ya tienes cuenta?{' '}
+            <button type="button" onClick={() => { setMode('login'); setError('') }} className="text-indigo-400 hover:text-indigo-300 underline">
+              Inicia sesión
+            </button>
+          </p>
+          <p className="text-xs text-gray-500 text-center">
+            ¿No tienes cuenta?{' '}
+            <button type="button" onClick={() => { setMode('register'); setError('') }} className="text-indigo-400 hover:text-indigo-300 underline">
+              Regístrate
+            </button>
+          </p>
+        </form>
+      ) : (
+        <>
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">Usuario</label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                placeholder="mi_usuario"
+                autoComplete="username"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">Clave</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                placeholder="••••••"
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              />
+            </div>
+
+            {error && (
+              <p className="text-red-400 text-xs bg-red-900/30 p-2 rounded">{error}</p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || !username || !password}
+              className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition disabled:opacity-40 text-sm"
+            >
+              {loading ? '...' : mode === 'login' ? 'Entrar' : 'Crear cuenta'}
+            </button>
+          </form>
+
+          <p className="text-xs text-gray-500 text-center mt-3">
+            {mode === 'login' ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?'}{' '}
+            <button onClick={switchMode} className="text-indigo-400 hover:text-indigo-300 underline">
+              {mode === 'login' ? 'Regístrate' : 'Inicia sesión'}
+            </button>
+          </p>
+
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-700" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-gray-800 px-2 text-gray-500">o</span>
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-500 text-center">
+            <button type="button" onClick={() => { setMode('guest'); setUsername(''); setError('') }} className="text-indigo-400 hover:text-indigo-300 underline">
+              Acceder como invitado
+            </button>
+          </p>
+        </>
+      )}
     </div>
   )
 }
