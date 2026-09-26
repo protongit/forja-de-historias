@@ -1,5 +1,6 @@
 import { useGame } from '../context/useGame'
 import CollapsiblePanel from './CollapsiblePanel'
+import HoverText from './HoverText'
 
 export default function StatsPanel() {
   const { state } = useGame()
@@ -16,7 +17,7 @@ export default function StatsPanel() {
         <>
           <p className="text-sm text-gray-200 font-medium mb-1">{character.name}</p>
           {character.background && (
-            <p className="text-xs text-gray-400 mb-2 line-clamp-2">{character.background}</p>
+            <HoverText className="text-xs text-gray-400 mb-2 block line-clamp-2" full={character.background} />
           )}
 
           {/* Level & XP */}

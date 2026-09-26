@@ -1,6 +1,7 @@
 import { useGame } from '../context/useGame'
 import { useState, useCallback } from 'react'
 import CollapsiblePanel from './CollapsiblePanel'
+import HoverText from './HoverText'
 
 export default function JournalPanel() {
   const { state, dispatch } = useGame()
@@ -49,12 +50,14 @@ export default function JournalPanel() {
               <div className="flex items-start gap-1.5 min-w-0">
                 <span className="text-xs shrink-0" aria-hidden="true">{eventIcons[entry.eventType] || '📌'}</span>
                 <div className="min-w-0">
-                  <p className="text-xs text-gray-200 font-medium truncate">{entry.title}</p>
-                  <p className="text-xs text-gray-400 line-clamp-2">{entry.summary}</p>
+                  <HoverText className="text-xs text-gray-200 font-medium block truncate" full={entry.title} />
+                  <HoverText className="text-xs text-gray-400 block line-clamp-2" full={entry.summary} />
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                {entry.location && <span className="text-xs text-gray-400 truncate max-w-[60px]" aria-label={`Ubicación: ${entry.location}`}>{entry.location}</span>}
+                {entry.location && (
+                  <HoverText className="text-xs text-gray-400 truncate max-w-[60px] inline-block align-bottom" full={entry.location} ariaLabel={`Ubicación: ${entry.location}`} />
+                )}
                 <button
                   onClick={() => toggleFavorite(entry.id)}
                   className="text-xs text-gray-400 hover:text-amber-400 transition"

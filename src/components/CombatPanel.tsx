@@ -1,6 +1,7 @@
 import { useRef, useCallback } from 'react'
 import { useGame } from '../context/useGame'
 import CollapsiblePanel from './CollapsiblePanel'
+import HoverText from './HoverText'
 
 export default function CombatPanel() {
   const { state, dispatch } = useGame()
@@ -48,7 +49,7 @@ export default function CombatPanel() {
               </div>
             )}
             {enemy.description && enemy.isAlive && (
-              <p className="text-xs text-gray-400 mt-0.5 truncate" aria-label={`Descripción: ${enemy.description}`}>{enemy.description}</p>
+              <HoverText className="text-xs text-gray-400 mt-0.5 block truncate" full={enemy.description} ariaLabel={`Descripción: ${enemy.description}`} />
             )}
           </div>
         ))}
