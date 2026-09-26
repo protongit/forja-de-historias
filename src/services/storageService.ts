@@ -48,10 +48,37 @@ function updateIndex(username: string | null, names: string[]) {
   localStorage.setItem(SAVE_INDEX_KEY(username), JSON.stringify(names))
 }
 
+// Attachments are base64 blobs that can blow up the localStorage quota — never persist them
+function stripAttachments(state: GameState): GameState {
+  if (!state.messages?.some((m) => m.attachments?.length)) return state
+  return {
+    ...state,
+    messages: state.messages.map((m) => (m.attachments?.length ? ({ ...m, attachments: undefined } as typeof m) : m)),
+  }
+}
+
+// Per-version state migrations. Key = version being migrated FROM.
+const MIGRATORS: Record<number, (state: GameState) => GameState> = {
+  // Example: 0: (state) => ({ ...state, newField: defaultNewField }),
+}
+
+function migrateState(version: number, state: GameState): GameState {
+  let migrated = state
+  for (let v = version; v < SAVE_VERSION; v++) {
+    const migrator = MIGRATORS[v]
+    if (migrator) migrated = migrator(migrated)
+  }
+  return migrated
+}
+
 export function saveGame(state: GameState, username: string | null, slot?: string): void {
   const name = slot || 'default'
-  const saveData: SaveData = { version: SAVE_VERSION, savedAt: Date.now(), state }
-  localStorage.setItem(slotKey(username, name), JSON.stringify(saveData))
+  const saveData: SaveData = { version: SAVE_VERSION, savedAt: Date.now(), state: stripAttachments(state) }
+  try {
+    localStorage.setItem(slotKey(username, name), JSON.stringify(saveData))
+  } catch {
+    throw new Error('No se pudo guardar: almacenamiento lleno o no disponible')
+  }
   const raw = localStorage.getItem(SAVE_INDEX_KEY(username))
   const names: string[] = raw ? JSON.parse(raw) : []
   if (!names.includes(name)) {
@@ -66,8 +93,12 @@ export function loadGame(username: string | null, slot?: string): GameState | nu
     const raw = localStorage.getItem(slotKey(username, name))
     if (!raw) return null
     const saveData: SaveData = JSON.parse(raw)
-    if (saveData.version !== SAVE_VERSION) return null
-    return saveData.state
+    if (typeof saveData?.version !== 'number' || !saveData?.state?.phase) return null
+    if (saveData.version > SAVE_VERSION) {
+      console.warn(`Partida guardada con versión ${saveData.version} (actual: ${SAVE_VERSION}). Actualiza la aplicación.`)
+      return null
+    }
+    return migrateState(saveData.version, saveData.state)
   } catch {
     return null
   }

@@ -78,12 +78,12 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
     }
   }
 
-  // --- ENEMY_DAMAGE / ENEMY_HEAL ---
-  const enemyDamageRegex = /\[{1,2}ENEMY_DAMAGE:\s*(.+?),\s*(\d+)\]{1,2}/i
+  // --- ENEMY_DAMAGE / ENEMY_HEAL (name captured greedily: it may contain commas) ---
+  const enemyDamageRegex = /\[{1,2}ENEMY_DAMAGE:\s*(.+),\s*(\d+)\]{1,2}/i
   const enemyDmg = cleaned.match(enemyDamageRegex)
   if (enemyDmg) actions.push({ type: 'UPDATE_ENEMY', name: enemyDmg[1].trim(), updates: { hp: Math.max(0, parseInt(enemyDmg[2])) } })
 
-  const enemyHealRegex = /\[{1,2}ENEMY_HEAL:\s*(.+?),\s*(\d+)\]{1,2}/i
+  const enemyHealRegex = /\[{1,2}ENEMY_HEAL:\s*(.+),\s*(\d+)\]{1,2}/i
   const enemyHeal = cleaned.match(enemyHealRegex)
   if (enemyHeal) actions.push({ type: 'UPDATE_ENEMY', name: enemyHeal[1].trim(), updates: { hp: Math.min(999, parseInt(enemyHeal[2])) } })
 
@@ -134,8 +134,8 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
     }
   }
 
-  // --- Companion commands ---
-  const addCompanionRegex = /\[{1,2}ADD_COMPANION:\s*(.+?),\s*(.+?),\s*stats:\s*(.+?)\]{1,2}/i
+  // --- Companion commands (description may contain commas → greedy until ", stats:") ---
+  const addCompanionRegex = /\[{1,2}ADD_COMPANION:\s*(.+?),\s*(.+),\s*stats:\s*(.+?)\]{1,2}/i
   const addComp = cleaned.match(addCompanionRegex)
   if (addComp) {
     const stats = addComp[3].trim().split(',').map((s) => {
@@ -152,13 +152,21 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
   const rmComp = cleaned.match(removeComp)
   if (rmComp) actions.push({ type: 'REMOVE_COMPANION', name: rmComp[1].trim() })
 
-  // --- Journal commands ---
-  const journalEntryRegex = /\[{1,2}JOURNAL_ENTRY:\s*(.+?),\s*(.+?),\s*(.+?)\]{1,2}/i
-  const je = cleaned.match(journalEntryRegex)
+  // --- Journal commands (summary may contain commas → greedy before the event type) ---
+  const JOURNAL_EVENT_TYPES = 'discovery|encounter|dialog|achievement|milestone'
+  const journalEntryRegex = new RegExp(`\\[{1,2}JOURNAL_ENTRY:\\s*(.+?),\\s*(.+),\\s*(${JOURNAL_EVENT_TYPES})\\]{1,2}`, 'i')
+  let je = cleaned.match(journalEntryRegex)
+  let jeType: JournalEventType = (je?.[3].trim() as JournalEventType) || 'discovery'
+  if (!je) {
+    // Fallback: unknown/missing event type — don't lose the entry
+    const genericRegex = /\[{1,2}JOURNAL_ENTRY:\s*(.+?),\s*(.+?)\]{1,2}/i
+    je = cleaned.match(genericRegex)
+    jeType = 'discovery'
+  }
   if (je) {
     actions.push({
       type: 'ADD_JOURNAL_ENTRY',
-      entry: { id: `j-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, title: je[1].trim(), summary: je[2].trim(), timestamp: Date.now(), eventType: (je[3].trim() as JournalEventType) || 'discovery', isFavorite: false },
+      entry: { id: `j-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, title: je[1].trim(), summary: je[2].trim(), timestamp: Date.now(), eventType: jeType, isFavorite: false },
     })
     actions.push({
       type: 'ADD_NOTIFICATION',
@@ -189,7 +197,7 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
   const ao = cleaned.match(addObjectiveRegex)
   if (ao) actions.push({ type: 'ADD_OBJECTIVE', objective: { name: ao[1].trim(), completed: false } })
 
-  // --- WORLD commands ---
+  // --- WORLD commands (descriptions may contain commas → greedy tail fields) ---
   const setLocationRegex = /\[{1,2}SET_LOCATION:\s*(.+?)\]{1,2}/i
   const sl = cleaned.match(setLocationRegex)
   if (sl) actions.push({ type: 'SET_CURRENT_LOCATION', name: sl[1].trim() })
@@ -203,7 +211,7 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
     })
   }
 
-  const addNpcRegex = /\[{1,2}ADD_NPC:\s*(.+?),\s*(.+?),\s*(.+?),\s*(-?\d+)\]{1,2}/i
+  const addNpcRegex = /\[{1,2}ADD_NPC:\s*(.+?),\s*(.+),\s*([^,]+?),\s*(-?\d+)\]{1,2}/i
   const an = cleaned.match(addNpcRegex)
   if (an) {
     actions.push({
@@ -219,7 +227,8 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
     })
   }
 
-  const updateNpcRegex = /\[{1,2}UPDATE_NPC:\s*(.+?),\s*(.+?),\s*(.+?)\]{1,2}/i
+  // value (last field) captured greedily so it may contain commas
+  const updateNpcRegex = /\[{1,2}UPDATE_NPC:\s*(.+?),\s*([^,]+?),\s*(.+?)\]{1,2}/i
   const un = cleaned.match(updateNpcRegex)
   if (un) {
     const field = un[2].trim()

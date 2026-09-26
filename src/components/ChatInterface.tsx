@@ -3,7 +3,6 @@ import { useRef, useEffect, useState, useMemo, useCallback, forwardRef, useImper
 import Message from './Message'
 import GenerationSkeleton from './GenerationSkeleton'
 import { sendChatStream } from '../services/aiService'
-import { clearLastResponseId } from '../services/aiService'
 import { getSetupPrompt, getGamemasterPrompt, SYSTEM_PROMPTS } from '../utils/prompts'
 import { processRawResponse, parseStats, parseSkills, cleanContentMarkers } from '../utils/commandCleaner'
 import { shouldSummarize, getMessagesToSummarize, summarizeMessages, buildSummaryMessages } from '../utils/contextSummarizer'
@@ -636,7 +635,6 @@ const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ 
     }
 
     dispatch({ type: 'SET_WAITING_AI', waiting: true })
-    clearLastResponseId()
 
     const currentPhase = state.phase
     const systemPrompt = buildSystemPrompt(currentPhase, state.tts.enabled, state.combatMode)
@@ -774,7 +772,10 @@ generateAdventure(quickSetupAnswers)
     for (const f of Array.from(files)) {
       const reader = new FileReader()
       reader.onload = () => {
-        newAtts.push({ file: f, dataUrl: reader.result as string })
+        // Store raw base64 (strip the data URL prefix) — aiService rebuilds the prefix
+        const raw = reader.result as string
+        const base64 = raw.includes('base64,') ? raw.split('base64,')[1] || '' : ''
+        newAtts.push({ file: f, dataUrl: base64 })
         if (newAtts.length === files.length) setAttachments((prev) => [...prev, ...newAtts])
       }
       reader.readAsDataURL(f)

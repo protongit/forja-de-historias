@@ -22,13 +22,21 @@ export default function SaveLoadPanel({ requestConfirm }: { requestConfirm?: (ti
     const name = selectedSlot || prompt('Nombre de la partida:') || state.adventureName || 'default'
     if (!name) return
     setSaving(true)
-    saveGame(state, username, name)
-    dispatch({
-      type: 'ADD_MESSAGE',
-      message: { id: crypto.randomUUID(), sender: 'system', content: `Partida "${name}" guardada correctamente.`, timestamp: Date.now() },
-    })
-    setSlots(listSaveSlots(username))
-    setSaving(false)
+    try {
+      saveGame(state, username, name)
+      dispatch({
+        type: 'ADD_MESSAGE',
+        message: { id: crypto.randomUUID(), sender: 'system', content: `Partida "${name}" guardada correctamente.`, timestamp: Date.now() },
+      })
+      setSlots(listSaveSlots(username))
+    } catch (err) {
+      dispatch({
+        type: 'ADD_MESSAGE',
+        message: { id: crypto.randomUUID(), sender: 'system', content: `Error al guardar: ${err instanceof Error ? err.message : 'error desconocido'}`, timestamp: Date.now() },
+      })
+    } finally {
+      setSaving(false)
+    }
   }
 
   function handleLoad() {

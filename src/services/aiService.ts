@@ -21,7 +21,9 @@ function buildApiMessages(systemPrompt: string, messages: Message[], charContext
     if (m.attachments?.length) {
       for (const att of m.attachments) {
         if (att.type === 'image' && att.data) {
-          parts.push({ type: 'image_url', image_url: { url: `data:${att.mimeType};base64,${att.data}` } })
+          // Tolerate legacy data stored as a full data URL
+          const url = att.data.startsWith('data:') ? att.data : `data:${att.mimeType};base64,${att.data}`
+          parts.push({ type: 'image_url', image_url: { url } })
         }
       }
     }
@@ -32,16 +34,6 @@ function buildApiMessages(systemPrompt: string, messages: Message[], charContext
   }
 
   return apiMessages
-}
-
-let lastResponseId: string | null = null
-
-export function getLastResponseId(): string | null {
-  return lastResponseId
-}
-
-export function clearLastResponseId(): void {
-  lastResponseId = null
 }
 
 async function fetchApi(config: AIConfig, body: Record<string, unknown>): Promise<Response> {
@@ -91,25 +83,18 @@ export async function sendChatStream(
     stream: true,
   }
 
-  // Use previous response ID for context caching (OpenAI-specific optimization)
-  if (lastResponseId && config.endpoint.includes('api.openai.com')) {
-    body.previous_response_id = lastResponseId
-  }
-
   const response = await fetchApi(config, body)
   if (!response.ok) throw new Error(`Error API (${response.status}): ${await response.text().catch(() => '') || response.statusText}`)
 
   const reader = response.body?.getReader()
   if (!reader) {
     const data = await response.json()
-    lastResponseId = data.id || null
     return data.choices[0].message.content
   }
 
   const decoder = new TextDecoder()
   let accumulated = ''
   let buffer = ''
-  let firstChunk = true
 
   while (true) {
     const { done, value } = await reader.read()
@@ -127,10 +112,6 @@ export async function sendChatStream(
 
       try {
         const parsed = JSON.parse(data)
-        if (firstChunk && parsed.id) {
-          lastResponseId = parsed.id
-          firstChunk = false
-        }
         const delta = parsed.choices?.[0]?.delta?.content
         if (delta) accumulated += delta
       } catch {
