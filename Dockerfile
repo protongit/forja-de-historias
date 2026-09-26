@@ -13,7 +13,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 RUN mkdir -p /app/data && chown -R node:node /app/data
 COPY --from=build /app/dist ./dist
-COPY server.js .
+COPY server.js server-validation.js .
 COPY server-config.json .
 EXPOSE 3000
 ENV DB_PATH=/app/data/game.db
