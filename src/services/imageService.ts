@@ -1,4 +1,5 @@
 import type { ImageConfig } from '../types/game'
+import { proxyAuthHeaders } from './proxyToken'
 
 export async function generateImage(config: ImageConfig, prompt: string): Promise<string> {
   const body: Record<string, unknown> = {
@@ -22,7 +23,7 @@ export async function generateImage(config: ImageConfig, prompt: string): Promis
   } else {
     res = await fetch('/api/proxy/image', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...proxyAuthHeaders() },
       body: JSON.stringify(body),
     })
   }

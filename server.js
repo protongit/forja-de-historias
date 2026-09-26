@@ -4,6 +4,7 @@ import { readFileSync, existsSync, mkdirSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import express from 'express'
+import rateLimit from 'express-rate-limit'
 import Database from 'better-sqlite3'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -103,6 +104,118 @@ try {
 const app = express()
 app.use(express.json({ limit: '10mb' }))
 
+// --- Rate limiting (protege la API key del servidor contra abuso) ---
+const proxyLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes. Inténtalo de nuevo en un minuto.' },
+})
+
+const statsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes. Inténtalo de nuevo en un minuto.' },
+})
+
+// --- Auth opcional: si AUTH_TOKEN está definido, los proxies lo exigen ---
+const AUTH_TOKEN = process.env.AUTH_TOKEN || ''
+
+function requireAuthToken(req, res, next) {
+  if (!AUTH_TOKEN) return next()
+  const header = req.headers.authorization || ''
+  if (header !== `Bearer ${AUTH_TOKEN}`) {
+    return res.status(401).json({ error: 'Token de autenticación inválido' })
+  }
+  next()
+}
+
+// --- Validación de payloads del proxy (whitelist, nunca reenvío arbitrario) ---
+const MAX_MESSAGES = 200
+const MAX_MESSAGE_CHARS = 100_000
+const MAX_ATTACHMENT_CHARS = 8_000_000
+
+function sanitizeApiMessages(raw) {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_MESSAGES) return null
+  const clean = []
+  for (const m of raw) {
+    if (!m || typeof m !== 'object') return null
+    if (!['system', 'user', 'assistant'].includes(m.role)) return null
+    let content
+    if (typeof m.content === 'string') {
+      content = m.content.slice(0, MAX_MESSAGE_CHARS)
+    } else if (Array.isArray(m.content)) {
+      if (m.content.length > 20) return null
+      content = m.content.map((part) => {
+        if (part?.type === 'text' && typeof part.text === 'string') {
+          return { type: 'text', text: part.text.slice(0, MAX_MESSAGE_CHARS) }
+        }
+        if (part?.type === 'image_url' && typeof part.image_url?.url === 'string') {
+          const url = part.image_url.url
+          if (url.length > MAX_ATTACHMENT_CHARS) return null
+          return { type: 'image_url', image_url: { url } }
+        }
+        return null
+      })
+      if (content.some((p) => p === null)) return null
+    } else {
+      return null
+    }
+    clean.push({ role: m.role, content })
+  }
+  return clean
+}
+
+function validateChatBody(req, res, next) {
+  const b = req.body || {}
+  const messages = sanitizeApiMessages(b.messages)
+  if (!messages) {
+    return res.status(400).json({ error: 'Payload inválido: campo "messages" requerido (array de {role, content})' })
+  }
+  req.body = {
+    model: typeof b.model === 'string' ? b.model.slice(0, 200) : 'gpt-4o-mini',
+    messages,
+    temperature: Number.isFinite(b.temperature) ? Math.min(2, Math.max(0, b.temperature)) : 0.8,
+    ...(b.max_tokens !== undefined && Number.isInteger(b.max_tokens) && b.max_tokens > 0
+      ? { max_tokens: Math.min(32768, b.max_tokens) }
+      : {}),
+    ...(b.stream === true ? { stream: true } : {}),
+  }
+  next()
+}
+
+function validateTtsBody(req, res, next) {
+  const b = req.body || {}
+  if (typeof b.input !== 'string' || !b.input.trim()) {
+    return res.status(400).json({ error: 'Campo "input" requerido' })
+  }
+  req.body = {
+    model: typeof b.model === 'string' ? b.model.slice(0, 200) : 'tts-1',
+    input: b.input.slice(0, 4096),
+    voice: typeof b.voice === 'string' ? b.voice.slice(0, 100) : 'alloy',
+    ...(Number.isFinite(b.speed) ? { speed: Math.min(4, Math.max(0.25, b.speed)) } : {}),
+    ...(typeof b.response_format === 'string' ? { response_format: b.response_format.slice(0, 40) } : {}),
+  }
+  next()
+}
+
+function validateImageBody(req, res, next) {
+  const b = req.body || {}
+  if (typeof b.prompt !== 'string' || !b.prompt.trim()) {
+    return res.status(400).json({ error: 'Campo "prompt" requerido' })
+  }
+  req.body = {
+    model: typeof b.model === 'string' ? b.model.slice(0, 200) : 'flux-2-klein',
+    prompt: b.prompt.slice(0, 2000),
+    ...(typeof b.size === 'string' ? { size: b.size.slice(0, 40) } : {}),
+    ...(Number.isInteger(b.n) && b.n > 0 ? { n: Math.min(4, b.n) } : {}),
+  }
+  next()
+}
+
 app.use(express.static(resolve('./dist'), { index: 'index.html' }))
 
 function stripKeys(config) {
@@ -114,10 +227,10 @@ function stripKeys(config) {
 }
 
 app.get('/api/guest-config', (_req, res) => {
-  res.json(stripKeys(serverConfig))
+  res.json({ ...stripKeys(serverConfig), authRequired: Boolean(AUTH_TOKEN) })
 })
 
-app.post('/api/proxy/chat', async (req, res) => {
+app.post('/api/proxy/chat', proxyLimiter, requireAuthToken, validateChatBody, async (req, res) => {
   try {
     const apiKey = getApiKey()
     if (!apiKey) {
@@ -133,6 +246,7 @@ app.post('/api/proxy/chat', async (req, res) => {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(req.body),
+      signal: AbortSignal.timeout(isStream ? 300_000 : 120_000),
     })
 
     if (!response.ok) {
@@ -158,7 +272,7 @@ app.post('/api/proxy/chat', async (req, res) => {
   }
 })
 
-app.post('/api/proxy/tts', async (req, res) => {
+app.post('/api/proxy/tts', proxyLimiter, requireAuthToken, validateTtsBody, async (req, res) => {
   try {
     const apiKey = getTtsApiKey()
     if (!apiKey) {
@@ -172,6 +286,7 @@ app.post('/api/proxy/tts', async (req, res) => {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(req.body),
+      signal: AbortSignal.timeout(60_000),
     })
 
     const buffer = await response.arrayBuffer()
@@ -181,7 +296,7 @@ app.post('/api/proxy/tts', async (req, res) => {
   }
 })
 
-app.post('/api/proxy/image', async (req, res) => {
+app.post('/api/proxy/image', proxyLimiter, requireAuthToken, validateImageBody, async (req, res) => {
   try {
     const apiKey = getImageApiKey()
     if (!apiKey) {
@@ -196,6 +311,7 @@ app.post('/api/proxy/image', async (req, res) => {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(req.body),
+      signal: AbortSignal.timeout(120_000),
     })
 
     if (!response.ok) {
@@ -211,7 +327,7 @@ app.post('/api/proxy/image', async (req, res) => {
 })
 
 // Stats API — upsert by session_id
-app.post('/api/stats', (req, res) => {
+app.post('/api/stats', statsLimiter, (req, res) => {
   if (!db) return res.status(500).json({ error: 'Database not available' })
   try {
     const {
@@ -219,6 +335,12 @@ app.post('/api/stats', (req, res) => {
       level, xpTotal, enemiesDefeated, timePlayedMs,
       result, messagesSent, diceRolls, diceSuccesses, diceFailures, imagesGenerated,
     } = req.body
+    if (typeof username !== 'string' || username.length > 40) {
+      return res.status(400).json({ error: 'Campo "username" inválido' })
+    }
+    if (sessionId !== undefined && (typeof sessionId !== 'string' || sessionId.length > 64)) {
+      return res.status(400).json({ error: 'Campo "sessionId" inválido' })
+    }
     const ip = req.ip || req.socket.remoteAddress || ''
     const stmt = db.prepare(`
       INSERT INTO game_stats (session_id, username, adventure_name, ip, level, xp_total, enemies_defeated, time_played_ms, messages_sent, dice_rolls, dice_successes, dice_failures, images_generated, result, updated_at)
@@ -238,7 +360,7 @@ app.post('/api/stats', (req, res) => {
     `)
     const resultStmt = stmt.run(
       sessionId || randomUUID(),
-      username || 'anon', adventureName || '', ip,
+      username.trim() || 'anon', String(adventureName || '').slice(0, 120), ip,
       level || 1, xpTotal || 0, enemiesDefeated || 0, timePlayedMs || 0,
       messagesSent || 0, diceRolls || 0, diceSuccesses || 0, diceFailures || 0, imagesGenerated || 0,
       result || 'active',
@@ -249,7 +371,7 @@ app.post('/api/stats', (req, res) => {
   }
 })
 
-app.get('/api/leaderboard', (req, res) => {
+app.get('/api/leaderboard', statsLimiter, (req, res) => {
   if (!db) return res.status(500).json({ error: 'Database not available' })
   try {
     const limit = Math.min(parseInt(req.query.limit) || 50, 100)

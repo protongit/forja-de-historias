@@ -1,4 +1,5 @@
 import type { TTSConfig } from '../types/game'
+import { proxyAuthHeaders } from './proxyToken'
 
 let audioEl: HTMLAudioElement | null = null
 let currentBlobUrl: string | null = null
@@ -35,7 +36,7 @@ async function fetchAndPlay(body: Record<string, unknown>, config: TTSConfig): P
   try {
     const res = await fetch('/api/proxy/tts', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...proxyAuthHeaders() },
       body: JSON.stringify(body),
     })
 

@@ -1,4 +1,5 @@
 import type { AIConfig, Message } from '../types/game'
+import { proxyAuthHeaders } from './proxyToken'
 
 type ContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }
 
@@ -53,7 +54,7 @@ async function fetchApi(config: AIConfig, body: Record<string, unknown>): Promis
   }
   return fetch('/api/proxy/chat', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...proxyAuthHeaders() },
     body: JSON.stringify(body),
   })
 }

@@ -3,6 +3,7 @@ import { useGame } from '../context/GameContext'
 import { validateConnection } from '../services/aiService'
 import { userDataKey } from '../services/authService'
 import { getVoices } from '../services/ttsService'
+import { getProxyToken, setProxyToken } from '../services/proxyToken'
 import type { AIConfig, ImageConfig, TTSConfig } from '../types/game'
 
 function loadSavedConfig(username: string | null): AIConfig | null {
@@ -61,6 +62,7 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<'idle' | 'success' | 'error'>('idle')
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
+  const [proxyToken, setProxyTokenState] = useState(getProxyToken())
 
   useEffect(() => {
     const saved = loadSavedConfig(state.currentUser)
@@ -172,6 +174,23 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
                 placeholder="sk-..."
               />
             </div>
+            {!config.apiKey && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Token de acceso al servidor <span className="text-gray-500 font-normal">(si el servidor lo requiere)</span>
+                </label>
+                <input
+                  type="password"
+                  value={proxyToken}
+                  onChange={(e) => {
+                    setProxyTokenState(e.target.value)
+                    setProxyToken(e.target.value)
+                  }}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                  placeholder="Déjalo vacío si no se requiere"
+                />
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">Modelo</label>
               <input

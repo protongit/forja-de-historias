@@ -1,7 +1,7 @@
 {
   "name": "forja-de-historias",
   "private": true,
-  "version": "1.7.0",
+  "version": "1.7.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,6 +13,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "better-sqlite3": "^12.11.1",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.7.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-markdown": "^10.1.0",

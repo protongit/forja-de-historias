@@ -1,4 +1,5 @@
 import type { Message, AIConfig } from '../types/game'
+import { proxyAuthHeaders } from '../services/proxyToken'
 
 const SUMMARIZATION_PROMPT = `Resume la siguiente conversación de juego de rol en 2-3 párrafos concisos.
 Mantén SOLO la información esencial para mantener la coherencia narrativa:
@@ -68,6 +69,7 @@ export async function summarizeMessages(
     headers['Authorization'] = `Bearer ${config.apiKey}`
     url = `${config.endpoint}/chat/completions`
   } else {
+    Object.assign(headers, proxyAuthHeaders())
     url = '/api/proxy/chat'
   }
 
