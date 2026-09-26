@@ -115,23 +115,13 @@ const GM_TTS = `TONO DEL NARRADOR (TTS):
 - Emociones válidas: neutral, grave, alegre, epico, misterioso, susurro, terrorifico
 - Usa esto para dar énfasis a momentos clave (combates tensos, diálogos emotivos, etc.)`
 
-const GM_IMAGE_EVENTS = `IMÁGENES AUTOMÁTICAS:
-- El juego genera imágenes automáticamente para ilustrar tu narrativa. Debes usar marcadores [[IMAGE: descripción]] o [[IMG: descripción]] en las situaciones siguientes:
-
-  1. **Nuevas ubicaciones**: Cada vez que el jugador descubra un lugar nuevo, tras la descripción inmersiva del entorno, incluye [[IMAGE: descripción visual de la escena del lugar]]. La imagen debe mostrar el entorno, la atmósfera y los elementos más característicos del sitio.
-
-  2. **NPCs por primera vez**: Cada vez que presentes un personaje nuevo, tras su descripción física, incluye [[IMAGE: descripción visual del personaje]]. Puedes representar al personaje como retrato, de cuerpo completo, en acción, interactuando con el entorno, o en cualquier composición que mejor refleje su personalidad y rol en la historia. Tú decides la mejor representación.
-
-  3. **Momentos relevantes de la historia**: Cuando ocurra un evento narrativo importante, incluye [[IMAGE: descripción de la escena]]. Esto incluye: giros argumentales, revelaciones impactantes, momentos épicos, descubrimientos cruciales, clímax de tensión, derrotas de villanos, encuentros con criaturas extraordinarias, transformaciones, juramentos solemnes, y cualquier momento que merezca ser visualmente recordado. La imagen debe capturar la esencia del momento para darle impacto emocional.
-
-- La imagen aparecerá en el mismo mensaje, justo en el lugar donde insertes el marcador.
-- Si quieres varias imágenes en un mismo mensaje, puedes usar varios marcadores separados.`
-
-const GM_IMAGE = `GENERACIÓN DE IMÁGENES:
-- Para generar una imagen, incluye en tu respuesta: [[IMAGE: descripción detallada de la imagen]] (también puedes usar [[IMG: ...]])
-- Ejemplo: "De repente, ante ti aparece una figura imponente. [[IMAGE: un dragón rojo escupiendo fuego sobre un castillo medieval al atardecer]]"
-- Consulta las reglas de IMÁGENES AUTOMÁTICAS para saber cuándo debes generar imágenes obligatoriamente.
-- Si quieres varias imágenes en un mismo mensaje, puedes usar varios marcadores separados.`
+const GM_IMAGES = `IMÁGENES (OBLIGATORIO):
+- Cuando describas por PRIMERA VEZ una ubicación nueva, añade: [[IMAGE: descripción visual del lugar]]
+- Cuando presentes por PRIMERA VEZ a un NPC, añade: [[IMAGE: retrato visual del personaje]]
+- En momentos clave (revelaciones, victorias épicas, derrotas, finales), añade: [[IMAGE: descripción de la escena]]
+- NO repitas imágenes de lugares o personajes que ya hayas ilustrado antes.
+- Ejemplo: "Ante ti se alza la torre. [[IMAGE: torre de obsidiana entre relámpagos púrpuras]]"
+- Puedes usar también [[IMG: ...]]. Varios marcadores = varias imágenes.`
 
 const GM_HP = `GESTIÓN DE HP DEL JUGADOR:
 - Cuando el jugador reciba daño: [[PLAYER_DAMAGE: cantidad]]
@@ -179,11 +169,9 @@ ${GM_JOURNAL}
 
 ${GM_TTS}
 
-${GM_IMAGE_EVENTS}
-
-${GM_IMAGE}
-
 ${GM_HP}
+
+${GM_IMAGES}
 
 ${GM_FORMAT}
 
@@ -222,11 +210,9 @@ ${GM_WORLD}
 
 ${GM_TTS}
 
-${GM_IMAGE_EVENTS}
-
-${GM_IMAGE}
-
 ${GM_HP}
+
+${GM_IMAGES}
 
 FORMATO DE OPCIONES: Puedes dar opciones al jugador con {{opción}}. Las opciones aparecen como botones clickeables.
 

@@ -162,6 +162,17 @@ export function buildCharContext(state: GameState): string {
     parts.push('')
   }
 
+  // --- RECORDATORIO DE IMÁGENES ---
+  if (state.imageConfig.enabled) {
+    parts.push('### IMÁGENES — RECORDATORIO (OBLIGATORIO)')
+    parts.push('Si en tu respuesta describes por PRIMERA VEZ una ubicación o un NPC (no están en las listas de "ya ilustrados"), o ocurre un momento clave, DEBES incluir [[IMAGE: descripción visual]] en tu texto.')
+    const imagedLocs = worldState.locations.filter((l) => l.hasImage).map((l) => l.name)
+    const imagedNpcs = worldState.npcs.filter((n) => n.hasImage).map((n) => n.name)
+    if (imagedLocs.length) parts.push(`- Ubicaciones ya ilustradas (NO repetir imagen): ${imagedLocs.join(', ')}`)
+    if (imagedNpcs.length) parts.push(`- NPCs ya ilustrados (NO repetir imagen): ${imagedNpcs.join(', ')}`)
+    parts.push('')
+  }
+
   const output = parts.join('\n')
   return output ? `\n\n${output}` : ''
 }

@@ -158,3 +158,28 @@ describe('parseStats y parseSkills', () => {
     expect(skills).toEqual([{ name: 'Sigilo', description: 'te permite moverte sin ser visto' }])
   })
 })
+
+describe('proceso de [[IMAGE]] (variantes de modelos pequeños)', () => {
+  it('captura dos imágenes en un mismo mensaje', () => {
+    const r = processRawResponse('Uno [[IMAGE: dragón rojo]] dos [[IMG: bosque encantado]]', 1)
+    expect(r.pendingImages.map((p) => p.prompt)).toEqual(['dragón rojo', 'bosque encantado'])
+    expect(r.cleaned).not.toContain('IMAGE')
+  })
+
+  it('admite prompt multilínea', () => {
+    const r = processRawResponse('Texto\n[[IMAGE: una torre\nde obsidiana bajo la lluvia]]\nfin', 1)
+    expect(r.pendingImages.length).toBe(1)
+    expect(r.pendingImages[0].prompt).toBe('una torre de obsidiana bajo la lluvia')
+  })
+
+  it('admite dos puntos chinos y corchetes anchos (MiMo)', () => {
+    const r = processRawResponse('［［IMAGE： mercado lleno de gente］］ y [[IMAGE： posada vieja]]', 1)
+    expect(r.pendingImages.map((p) => p.prompt)).toEqual(['mercado lleno de gente', 'posada vieja'])
+    expect(r.cleaned).not.toContain('mercado')
+  })
+
+  it('deduplica prompts repetidos', () => {
+    const r = processRawResponse('[[IMAGE: castillo]] ... [[IMAGE: castillo]]', 1)
+    expect(r.pendingImages.length).toBe(1)
+  })
+})

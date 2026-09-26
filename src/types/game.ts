@@ -127,6 +127,7 @@ export interface WorldLocation {
   description: string
   discovered: boolean
   exits: string[]
+  hasImage?: boolean
 }
 
 export interface WorldNPC {
@@ -136,6 +137,7 @@ export interface WorldNPC {
   isAlive: boolean
   relationship: number
   attitude: number
+  hasImage?: boolean
 }
 
 export interface WorldState {
@@ -266,6 +268,8 @@ export type GameAction =
   | { type: 'SET_CURRENT_LOCATION'; name: string }
   | { type: 'ADD_LOCATION'; location: WorldLocation }
   | { type: 'ADD_WORLD_NPC'; npc: WorldNPC }
+  | { type: 'MARK_LOCATION_IMAGE'; name: string }
+  | { type: 'MARK_NPC_IMAGE'; name: string }
   | { type: 'UPDATE_WORLD_NPC'; name: string; updates: Partial<WorldNPC> }
   | { type: 'REMOVE_WORLD_NPC'; name: string }
   | { type: 'SET_TIME_OF_DAY'; time: WorldState['timeOfDay'] }

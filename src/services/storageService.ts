@@ -1,7 +1,7 @@
 import type { GameState, SaveData } from '../types/game'
 import { userDataKey } from './authService'
 
-const SAVE_VERSION = 1
+const SAVE_VERSION = 2
 
 export const AUTO_SAVE_SLOT = 'autosave'
 
@@ -80,7 +80,15 @@ function stripAttachments(state: GameState): GameState {
 
 // Per-version state migrations. Key = version being migrated FROM.
 const MIGRATORS: Record<number, (state: GameState) => GameState> = {
-  // Example: 0: (state) => ({ ...state, newField: defaultNewField }),
+  // v1 → v2: worldState.locations/npcs ahora incluyen hasImage (cobertura de imágenes)
+  1: (state) => ({
+    ...state,
+    worldState: {
+      ...state.worldState,
+      locations: (state.worldState?.locations ?? []).map((l) => ({ ...l, hasImage: l.hasImage ?? false })),
+      npcs: (state.worldState?.npcs ?? []).map((n) => ({ ...n, hasImage: n.hasImage ?? false })),
+    },
+  }),
 }
 
 function migrateState(version: number, state: GameState): GameState {

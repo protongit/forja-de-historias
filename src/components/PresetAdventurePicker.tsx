@@ -127,6 +127,7 @@ export default function PresetAdventurePicker({ onBack, onStartCustom, onStart, 
     if (!preset) return
     const gameState = buildStateFromPreset(preset, state.currentUser || crypto.randomUUID().slice(0, 8))
     gameState.aiConfig = state.aiConfig
+    gameState.imageConfig = state.imageConfig
     gameState.tts = { ...gameState.tts, ...state.tts, emotion: preset.ttsEmotion }
     dispatch({ type: 'LOAD_STATE', state: gameState })
     onStart?.()
@@ -136,6 +137,7 @@ export default function PresetAdventurePicker({ onBack, onStartCustom, onStart, 
     const preset = PRESET_AVENTURAS[Math.floor(Math.random() * PRESET_AVENTURAS.length)]
     const gameState = buildStateFromPreset(preset, state.currentUser || crypto.randomUUID().slice(0, 8))
     gameState.aiConfig = state.aiConfig
+    gameState.imageConfig = state.imageConfig
     gameState.tts = { ...gameState.tts, ...state.tts, emotion: preset.ttsEmotion }
     dispatch({ type: 'LOAD_STATE', state: gameState })
     onStart?.()

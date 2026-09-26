@@ -46,6 +46,26 @@ export function worldReducer(state: GameState, action: GameAction): GameState {
       }
     case 'REMOVE_WORLD_NPC':
       return { ...state, worldState: { ...state.worldState, npcs: state.worldState.npcs.filter((n) => n.name !== action.name) } }
+    case 'MARK_LOCATION_IMAGE':
+      return {
+        ...state,
+        worldState: {
+          ...state.worldState,
+          locations: state.worldState.locations.map((l) =>
+            l.name === action.name ? { ...l, hasImage: true } : l
+          ),
+        },
+      }
+    case 'MARK_NPC_IMAGE':
+      return {
+        ...state,
+        worldState: {
+          ...state.worldState,
+          npcs: state.worldState.npcs.map((n) =>
+            n.name === action.name ? { ...n, hasImage: true } : n
+          ),
+        },
+      }
     case 'SET_TIME_OF_DAY':
       return { ...state, worldState: { ...state.worldState, timeOfDay: action.time } }
     case 'SET_WEATHER':

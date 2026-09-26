@@ -305,13 +305,19 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
   }
 
   // --- IMAGE GENERATION ---
+  // Acepta variantes comunes de modelos pequeños: corchetes simples o dobles,
+  // corchetes anchos ［［...］］, dos puntos ASCII o chinos "：" y prompts multilínea.
   const pendingImages: { prompt: string }[] = []
-  const imagenRegex = /\[{1,2}(IMAGE|IMG):\s*(.+?)\]{1,2}/gi
-  let imgMatch
-  while ((imgMatch = imagenRegex.exec(cleaned)) !== null) {
-    pendingImages.push({ prompt: imgMatch[2].trim() })
-    cleaned = cleaned.replace(imgMatch[0], '')
+  const imagenRegex = /[[［]{1,2}(IMAGE|IMG)[：:]\s*([\s\S]+?)[\]］]{1,2}/gi
+  const seenPrompts = new Set<string>()
+  for (const m of cleaned.matchAll(imagenRegex)) {
+    const prompt = m[2].replace(/\s+/g, ' ').trim()
+    if (prompt && !seenPrompts.has(prompt.toLowerCase())) {
+      seenPrompts.add(prompt.toLowerCase())
+      pendingImages.push({ prompt })
+    }
   }
+  cleaned = cleaned.replace(imagenRegex, '')
 
   cleaned = cleanBracketCommands(cleaned)
   return { cleaned, actions, pendingImages }

@@ -8,6 +8,7 @@ import { shouldSummarize, getMessagesToSummarize, summarizeMessages, buildSummar
 import { buildSystemPrompt, buildCharContext, resolveToneEmotion } from '../utils/charContext'
 import { extractField, extractList } from '../utils/parser'
 import { generateImage } from '../services/imageService'
+import { pickAutoImage } from '../utils/autoImages'
 import type { Message as GameMessage, GameState, GameAction, RawLogEntry, TTSVoiceEmotion } from '../types/game'
 
 type AttachmentInput = { type: string; data: string; mimeType: string; name: string }
@@ -68,11 +69,24 @@ function dispatchPhaseTransition(aiResponse: string, result: ProcessedResponse, 
   return { transition: 'normal', messageId: id }
 }
 
-async function handlePendingImages(result: ProcessedResponse, imageConfig: GameState['imageConfig'], hostMessageId: string, dispatch: Dispatch<GameAction>) {
-  if (!result.pendingImages?.length) return
+async function handlePendingImages(result: ProcessedResponse, imageConfig: GameState['imageConfig'], hostMessageId: string, dispatch: Dispatch<GameAction>, transition = 'normal', sceneText = '', state?: GameState) {
   if (!imageConfig.enabled) return
+  const jobs: { prompt: string; mark?: GameAction }[] = result.pendingImages.map((p) => ({ prompt: p.prompt }))
+  if (!jobs.length && state) {
+    const auto = pickAutoImage({
+      imageEnabled: true,
+      actions: result.actions,
+      locations: state.worldState.locations,
+      npcs: state.worldState.npcs,
+      transition,
+      sceneText,
+      setupAnswers: state.setupAnswers,
+    })
+    if (auto) jobs.push(auto)
+  }
+  if (!jobs.length) return
 
-  for (const { prompt } of result.pendingImages) {
+  for (const { prompt, mark } of jobs) {
     try {
       const url = await generateImage(imageConfig, prompt)
       if (url) {
@@ -82,6 +96,7 @@ async function handlePendingImages(result: ProcessedResponse, imageConfig: GameS
           content: `![${prompt}](${url})`,
         })
         dispatch({ type: 'INCREMENT_STAT', stat: 'imagesGenerated' })
+        if (mark) dispatch(mark)
       }
     } catch (err) {
       dispatch({
@@ -231,7 +246,7 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
       }
 
       if (messageId) {
-        await handlePendingImages(result, state.imageConfig, messageId, dispatch)
+        await handlePendingImages(result, state.imageConfig, messageId, dispatch, transition, result.cleaned, state)
       }
 
       if (currentPhase === 'playing' && messageId) {
@@ -323,9 +338,9 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
           dispatch(action)
         }
 
-        const { messageId } = dispatchPhaseTransition(aiResponse, result, dispatch, null)
+        const { messageId, transition } = dispatchPhaseTransition(aiResponse, result, dispatch, null)
         if (messageId) {
-          handlePendingImages(result, state.imageConfig, messageId, dispatch)
+          handlePendingImages(result, state.imageConfig, messageId, dispatch, transition, result.cleaned, state)
         }
       })
       .catch((err) => {
@@ -372,7 +387,7 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
         dispatch({ type: 'TTS_SET_EMOTION', emotion: toneEmotion as TTSVoiceEmotion })
       }
 
-      await handlePendingImages(result, state.imageConfig, msgId, dispatch)
+      await handlePendingImages(result, state.imageConfig, msgId, dispatch, 'generation-complete', result.cleaned, state)
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Error al generar la aventura'
       dispatch({ type: 'SET_ERROR', error: errorMsg })
