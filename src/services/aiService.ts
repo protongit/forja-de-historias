@@ -3,7 +3,7 @@ import { proxyAuthHeaders } from './proxyToken'
 
 type ContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }
 
-function buildApiMessages(systemPrompt: string, messages: Message[], charContext?: string) {
+export function buildApiMessages(systemPrompt: string, messages: Message[], charContext?: string) {
   const apiMessages: { role: 'system' | 'user' | 'assistant'; content: string | ContentPart[] }[] = []
 
   // Merge all system content into a single message at index 0 (required by many APIs)
@@ -27,9 +27,11 @@ function buildApiMessages(systemPrompt: string, messages: Message[], charContext
         }
       }
     }
+    // Plain string when the message is text-only (required by some OpenAI-compatible servers)
+    const hasImage = parts.some((p) => p.type === 'image_url')
     apiMessages.push({
       role: (m.sender === 'player' ? 'user' : 'assistant') as 'user' | 'assistant',
-      content: parts.length > 0 ? parts : m.content,
+      content: hasImage ? parts : m.content,
     })
   }
 
