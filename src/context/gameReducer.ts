@@ -1,5 +1,6 @@
 import type { GameState, GameAction, GameStats, WorldState } from '../types/game'
 import { getCurrentUser } from '../services/authService'
+import { computeKeepFromIndex } from '../utils/contextSummarizer'
 
 export const initialWorldState: WorldState = {
   currentLocation: null,
@@ -255,11 +256,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, worldState: { ...state.worldState, timeOfDay: action.time } }
     case 'SET_WEATHER':
       return { ...state, worldState: { ...state.worldState, weather: action.weather } }
-    case 'REPLACE_MESSAGES_WITH_SUMMARY':
+    case 'COMPACT_MESSAGES': {
+      const msgs = state.messages
+      if (msgs.length <= 10) return state
+      const keepFromIndex = computeKeepFromIndex(msgs)
       return {
         ...state,
-        messages: [action.summaryMessage, ...state.messages.slice(action.keepFromIndex)],
+        messages: [action.summaryMessage, ...msgs.slice(keepFromIndex)],
       }
+    }
     case 'INCREMENT_STAT':
       return { ...state, gameStats: { ...state.gameStats, [action.stat]: (state.gameStats[action.stat] as number) + 1 } }
     case 'UPDATE_STATS_BATCH':

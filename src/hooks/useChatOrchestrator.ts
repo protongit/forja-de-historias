@@ -4,7 +4,7 @@ import { useGame } from '../context/useGame'
 import { sendChatStream } from '../services/aiService'
 import { processRawResponse, cleanContentMarkers, parseStats, parseSkills } from '../utils/commandCleaner'
 import type { ProcessedResponse } from '../utils/commandCleaner'
-import { shouldSummarize, getMessagesToSummarize, summarizeMessages, buildSummaryMessages } from '../utils/contextSummarizer'
+import { shouldSummarize, getMessagesToSummarize, summarizeMessages, buildSummaryMessage } from '../utils/contextSummarizer'
 import { buildSystemPrompt, buildCharContext, resolveToneEmotion } from '../utils/charContext'
 import { extractField, extractList } from '../utils/parser'
 import { generateImage } from '../services/imageService'
@@ -216,17 +216,9 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
           if (toSummarize.length > 5) {
             summarizeMessages(state.aiConfig, toSummarize)
               .then((summary) => {
-                const { keepFromIndex } = buildSummaryMessages(msgs)
-                dispatch({
-                  type: 'REPLACE_MESSAGES_WITH_SUMMARY',
-                  summaryMessage: {
-                    id: `summary-${Date.now()}`,
-                    sender: 'system',
-                    content: `[Resumen de eventos anteriores: ${summary}]`,
-                    timestamp: Date.now(),
-                  },
-                  keepFromIndex,
-                })
+                // El reducer calcula keepFromIndex con los mensajes ACTUALES: evita
+                // borrar mensajes añadidos mientras la IA generaba el resumen
+                dispatch({ type: 'COMPACT_MESSAGES', summaryMessage: buildSummaryMessage(summary) })
               })
               .catch(() => {
                 // Silently fail — summarization is optional

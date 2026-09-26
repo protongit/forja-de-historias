@@ -270,7 +270,7 @@ export type GameAction =
   | { type: 'REMOVE_WORLD_NPC'; name: string }
   | { type: 'SET_TIME_OF_DAY'; time: WorldState['timeOfDay'] }
   | { type: 'SET_WEATHER'; weather: string | null }
-  | { type: 'REPLACE_MESSAGES_WITH_SUMMARY'; summaryMessage: Message; keepFromIndex: number }
+  | { type: 'COMPACT_MESSAGES'; summaryMessage: Message }
   | { type: 'INCREMENT_STAT'; stat: keyof GameStats }
   | { type: 'UPDATE_STATS_BATCH'; stats: Partial<GameStats> }
   | { type: 'DELETE_MESSAGE'; id: string }

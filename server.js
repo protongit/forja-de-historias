@@ -104,6 +104,12 @@ try {
 const app = express()
 app.use(express.json({ limit: '10mb' }))
 
+// Descomentar (o TRUST_PROXY=true) cuando el servidor corre detrás de un proxy inverso
+// para que rate limiting e IP de stats usen la IP real del cliente
+if (process.env.TRUST_PROXY === 'true') {
+  app.set('trust proxy', 1)
+}
+
 // --- Rate limiting (protege la API key del servidor contra abuso) ---
 const proxyLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -216,7 +222,7 @@ function validateImageBody(req, res, next) {
   next()
 }
 
-app.use(express.static(resolve('./dist'), { index: 'index.html' }))
+app.use(express.static(resolve(__dirname, 'dist'), { index: 'index.html' }))
 
 function stripKeys(config) {
   return {
@@ -229,6 +235,12 @@ function stripKeys(config) {
 app.get('/api/guest-config', (_req, res) => {
   res.json({ ...stripKeys(serverConfig), authRequired: Boolean(AUTH_TOKEN) })
 })
+
+function upstreamError(res, status, detail, label) {
+  console.error(`[${label}] upstream ${status}: ${String(detail).slice(0, 500)}`)
+  const forward = status >= 400 && status < 600 ? status : 502
+  res.status(forward).json({ error: 'El proveedor de IA devolvió un error. Revisa la configuración del servidor.' })
+}
 
 app.post('/api/proxy/chat', proxyLimiter, requireAuthToken, validateChatBody, async (req, res) => {
   try {
@@ -251,7 +263,7 @@ app.post('/api/proxy/chat', proxyLimiter, requireAuthToken, validateChatBody, as
 
     if (!response.ok) {
       const errBody = await response.text().catch(() => '')
-      return res.status(response.status).json({ error: errBody || response.statusText })
+      return upstreamError(res, response.status, errBody, 'proxy/chat')
     }
 
     if (isStream) {
@@ -268,7 +280,8 @@ app.post('/api/proxy/chat', proxyLimiter, requireAuthToken, validateChatBody, as
       res.status(response.status).json(data)
     }
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    console.error('[proxy/chat] fetch failed:', err.message)
+    res.status(502).json({ error: 'No se pudo contactar con el proveedor de IA' })
   }
 })
 
@@ -292,7 +305,8 @@ app.post('/api/proxy/tts', proxyLimiter, requireAuthToken, validateTtsBody, asyn
     const buffer = await response.arrayBuffer()
     res.status(response.status).set(response.headers.get('content-type') ? { 'Content-Type': response.headers.get('content-type') } : {}).send(Buffer.from(buffer))
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    console.error('[proxy/tts] fetch failed:', err.message)
+    res.status(502).json({ error: 'No se pudo contactar con el proveedor de TTS' })
   }
 })
 
@@ -316,17 +330,24 @@ app.post('/api/proxy/image', proxyLimiter, requireAuthToken, validateImageBody, 
 
     if (!response.ok) {
       const errBody = await response.text().catch(() => '')
-      return res.status(response.status).json({ error: errBody || response.statusText })
+      return upstreamError(res, response.status, errBody, 'proxy/image')
     }
 
     const data = await response.json()
     res.json(data)
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    console.error('[proxy/image] fetch failed:', err.message)
+    res.status(502).json({ error: 'No se pudo contactar con el proveedor de imágenes' })
   }
 })
 
-// Stats API — upsert by session_id
+// --- Stats API — upsert by session_id ---
+function toInt(value, min, max, fallback = 0) {
+  const n = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(n)) return fallback
+  return Math.max(min, Math.min(max, Math.floor(n)))
+}
+
 app.post('/api/stats', statsLimiter, (req, res) => {
   if (!db) return res.status(500).json({ error: 'Database not available' })
   try {
@@ -361,9 +382,16 @@ app.post('/api/stats', statsLimiter, (req, res) => {
     const resultStmt = stmt.run(
       sessionId || randomUUID(),
       username.trim() || 'anon', String(adventureName || '').slice(0, 120), ip,
-      level || 1, xpTotal || 0, enemiesDefeated || 0, timePlayedMs || 0,
-      messagesSent || 0, diceRolls || 0, diceSuccesses || 0, diceFailures || 0, imagesGenerated || 0,
-      result || 'active',
+      toInt(level, 1, 100, 1),
+      toInt(xpTotal, 0, 1_000_000_000),
+      toInt(enemiesDefeated, 0, 1_000_000),
+      toInt(timePlayedMs, 0, 1_000_000_000_000),
+      toInt(messagesSent, 0, 10_000_000),
+      toInt(diceRolls, 0, 10_000_000),
+      toInt(diceSuccesses, 0, 10_000_000),
+      toInt(diceFailures, 0, 10_000_000),
+      toInt(imagesGenerated, 0, 1_000_000),
+      ['active', 'success', 'failure'].includes(result) ? result : 'active',
     )
     res.json({ ok: true, id: resultStmt.lastInsertRowid })
   } catch (err) {
@@ -388,7 +416,7 @@ app.get('/api/leaderboard', statsLimiter, (req, res) => {
 })
 
 app.use((_req, res) => {
-  res.sendFile(resolve('./dist/index.html'))
+  res.sendFile(resolve(__dirname, 'dist', 'index.html'))
 })
 
 app.listen(PORT, () => {

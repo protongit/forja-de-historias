@@ -13,6 +13,7 @@ Mantén SOLO la información esencial para mantener la coherencia narrativa:
 Omite saludos iniciales, interacciones triviales y detalles irrelevantes.
 El resumen será leído por un director de juego IA para continuar la historia, así que debe incluir suficiente contexto para mantener coherencia.`
 
+export const SUMMARY_PREFIX = '[Resumen de eventos anteriores: '
 const MAX_UNSUMMARIZED = 50
 const SUMMARIZATION_BATCH = 35
 
@@ -20,26 +21,31 @@ export function shouldSummarize(messageCount: number): boolean {
   return messageCount > MAX_UNSUMMARIZED
 }
 
+export function isSummaryMessage(m: Message): boolean {
+  return m.content.startsWith('[Resumen de eventos anteriores')
+}
+
 export function getMessagesToSummarize(messages: Message[]): Message[] {
-  const nonSummary = messages.filter((m) => !m.content.startsWith('[Resumen de eventos anteriores'))
+  const nonSummary = messages.filter((m) => !isSummaryMessage(m))
   const toSummarize = nonSummary.slice(0, Math.min(SUMMARIZATION_BATCH, nonSummary.length - 10))
   return toSummarize
 }
 
-export function buildSummaryMessages(messages: Message[]): { summaryMessage: Message; keepFromIndex: number } {
-  const firstKept = messages.findIndex((m) => !m.content.startsWith('[Resumen de eventos anteriores'))
+// Índice a partir del cual se conservan los mensajes al compactar (elimina el resumen previo si existe)
+export function computeKeepFromIndex(messages: Message[]): number {
+  const firstKept = messages.findIndex((m) => !isSummaryMessage(m))
   const keepFromIndex = firstKept === -1
     ? Math.min(SUMMARIZATION_BATCH, messages.length - 10)
     : firstKept + SUMMARIZATION_BATCH
+  return Math.max(0, Math.min(keepFromIndex, messages.length))
+}
 
+export function buildSummaryMessage(summary: string): Message {
   return {
-    summaryMessage: {
-      id: `summary-${Date.now()}`,
-      sender: 'system',
-      content: '[Resumen de eventos anteriores: (generándose...)]',
-      timestamp: Date.now(),
-    },
-    keepFromIndex: Math.min(keepFromIndex, messages.length),
+    id: `summary-${Date.now()}`,
+    sender: 'system',
+    content: `${SUMMARY_PREFIX}${summary}]`,
+    timestamp: Date.now(),
   }
 }
 

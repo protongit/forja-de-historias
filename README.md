@@ -26,7 +26,7 @@ Chatbot interactivo que dirige partidas de rol de mesa conversacionales usando I
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS |
 | Backend | Node.js, Express 5, better-sqlite3 |
 | IA | OpenAI API compatible (GPT-4o-mini por defecto) |
-| Despliegue | Docker multi-stage, nginx |
+| Despliegue | Docker multi-stage (Express sirve el build estático); `nginx.conf` opcional para despliegue clásico |
 
 ## Requisitos
 

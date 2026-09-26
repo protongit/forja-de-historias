@@ -29,5 +29,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 # TTS_ENABLED, TTS_MODE, TTS_ENDPOINT, TTS_MODEL, TTS_VOICE, TTS_RATE, TTS_PITCH, TTS_AUTO_PLAY
 # OPENAI_API_KEY, OPENAI_TTS_API_KEY, OPENAI_IMAGE_API_KEY
 # AUTH_TOKEN (si se define, /api/proxy/* exige Authorization: Bearer <token>)
+# TRUST_PROXY=true (habilita trust proxy: IP real tras nginx/otro proxy para rate limit y stats)
 
 CMD ["node", "server.js"]

@@ -11,7 +11,7 @@ Aplicación web de juego de rol conversacional con IA. Un Director de Juego (GM)
 | Frontend | React 19, TypeScript, Vite 8, Tailwind CSS 4 |
 | Backend | Node.js 22, Express 5, better-sqlite3 |
 | IA | OpenAI API compatible (GPT-4o-mini por defecto) |
-| Despliegue | Docker multi-stage, nginx |
+| Despliegue | Docker multi-stage (Express sirve el build estático); `nginx.conf` opcional para despliegue clásico |
 
 ## Estado global
 
