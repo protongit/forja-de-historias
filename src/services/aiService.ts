@@ -38,18 +38,20 @@ export function buildApiMessages(systemPrompt: string, messages: Message[], char
   return apiMessages
 }
 
-async function fetchApi(config: AIConfig, body: Record<string, unknown>): Promise<Response> {
+async function fetchApi(config: AIConfig, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
   if (config.apiKey) {
     return fetch(`${config.endpoint}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
       body: JSON.stringify(body),
+      signal,
     })
   }
   return fetch('/api/proxy/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...proxyAuthHeaders() },
     body: JSON.stringify(body),
+    signal,
   })
 }
 
@@ -70,12 +72,19 @@ export async function sendChat(
   return data.choices[0].message.content
 }
 
+export interface ChatStreamOptions {
+  onDelta?: (accumulated: string) => void
+  signal?: AbortSignal
+}
+
 export async function sendChatStream(
   config: AIConfig,
   systemPrompt: string,
   messages: Message[],
-  charContext?: string
+  charContext?: string,
+  options?: ChatStreamOptions
 ): Promise<string> {
+  const { onDelta, signal } = options ?? {}
   const apiMessages = buildApiMessages(systemPrompt, messages, charContext)
 
   const body: Record<string, unknown> = {
@@ -85,7 +94,7 @@ export async function sendChatStream(
     stream: true,
   }
 
-  const response = await fetchApi(config, body)
+  const response = await fetchApi(config, body, signal)
   if (!response.ok) throw new Error(`Error API (${response.status}): ${await response.text().catch(() => '') || response.statusText}`)
 
   const reader = response.body?.getReader()
@@ -98,28 +107,40 @@ export async function sendChatStream(
   let accumulated = ''
   let buffer = ''
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
+  const cancelReader = () => { reader.cancel().catch(() => {}) }
+  signal?.addEventListener('abort', cancelReader)
 
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() || ''
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done || signal?.aborted) break
 
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed || !trimmed.startsWith('data: ')) continue
-      const data = trimmed.slice(6)
-      if (data === '[DONE]') continue
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
 
-      try {
-        const parsed = JSON.parse(data)
-        const delta = parsed.choices?.[0]?.delta?.content
-        if (delta) accumulated += delta
-      } catch {
-        // Skip malformed SSE lines
+      let changed = false
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed || !trimmed.startsWith('data: ')) continue
+        const data = trimmed.slice(6)
+        if (data === '[DONE]') continue
+
+        try {
+          const parsed = JSON.parse(data)
+          const delta = parsed.choices?.[0]?.delta?.content
+          if (delta) {
+            accumulated += delta
+            changed = true
+          }
+        } catch {
+          // Skip malformed SSE lines
+        }
       }
+      if (changed) onDelta?.(accumulated)
     }
+  } finally {
+    signal?.removeEventListener('abort', cancelReader)
   }
 
   return accumulated

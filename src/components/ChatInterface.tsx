@@ -4,6 +4,7 @@ import Message from './Message'
 import GenerationSkeleton from './GenerationSkeleton'
 import { speakMessageText } from '../services/ttsService'
 import { upsertGameStats } from '../services/statsService'
+import { saveGame, AUTO_SAVE_SLOT } from '../services/storageService'
 import { useChatOrchestrator } from '../hooks/useChatOrchestrator'
 
 interface SpeechRecognitionResultLike {
@@ -180,7 +181,38 @@ export default function ChatInterface({ quickSetupAnswers, onQuickSetupConsumed 
     speakMessageText(lastMsg.content, state.tts)
   }, [state.messages, state.isWaitingAI, state.tts])
 
+  // --- Autosave: no perder la partida al recargar ---
+  const stateRef = useRef(state)
+  useEffect(() => {
+    stateRef.current = state
+  })
+
+  function writeAutosave() {
+    const s = stateRef.current
+    if (!s.currentUser || s.phase === 'config' || s.messages.length === 0) return
+    try {
+      saveGame(s, s.currentUser, AUTO_SAVE_SLOT)
+    } catch {
+      // cuota llena: mejor no molestar al jugador
+    }
+  }
+
+  useEffect(() => {
+    if (!state.currentUser || state.phase === 'config' || state.messages.length === 0) return
+    const id = setTimeout(writeAutosave, 1500)
+    return () => clearTimeout(id)
+     
+  }, [state.messages, state.phase, state.currentUser])
+
+  useEffect(() => {
+    window.addEventListener('beforeunload', writeAutosave)
+    return () => window.removeEventListener('beforeunload', writeAutosave)
+     
+  }, [])
+
   const phaseToast = PHASE_TOASTS[state.phase]
+  const lastMsg = state.messages[state.messages.length - 1]
+  const lastIsGmSlot = !!lastMsg && state.isWaitingAI && lastMsg.sender === 'gm'
 
   return (
     <div className="flex flex-col h-full">
@@ -190,6 +222,7 @@ export default function ChatInterface({ quickSetupAnswers, onQuickSetupConsumed 
           <div key={msg.id}>
             <Message
               message={msg}
+              isLoading={msg === lastMsg && lastIsGmSlot && msg.content === ''}
               onSelectOption={
                 state.phase !== 'completed' && msg.sender === 'gm'
                   ? (opt) => chatInputRef.current?.sendMessage(opt)
@@ -206,7 +239,7 @@ export default function ChatInterface({ quickSetupAnswers, onQuickSetupConsumed 
         {state.isWaitingAI && state.phase === 'generation' && (
           <GenerationSkeleton />
         )}
-        {state.isWaitingAI && state.phase !== 'generation' && (
+        {state.isWaitingAI && state.phase !== 'generation' && !lastIsGmSlot && (
           <Message message={LOADING_MESSAGE} isLoading />
         )}
         <div ref={bottomRef} />
@@ -231,7 +264,7 @@ interface PendingAttachment {
 const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ quickSetupAnswers, onQuickSetupConsumed }: ChatInputProps, ref) {
   const { state, dispatch } = useGame()
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const { sendMessage: sendToAI, undoLastMessage } = useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed })
+  const { sendMessage: sendToAI, undoLastMessage, cancelGeneration } = useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed })
   const [recording, setRecording] = useState(false)
   const [interimText, setInterimText] = useState('')
   const [attachments, setAttachments] = useState<{ file: File; dataUrl: string }[]>([])
@@ -387,13 +420,23 @@ const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ 
           disabled={state.isWaitingAI}
         />
         <div className="flex flex-col gap-1.5">
-          <button
-            onClick={() => sendMessage()}
-            disabled={state.isWaitingAI}
-            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition disabled:opacity-50"
-          >
-            Enviar
-          </button>
+          {state.isWaitingAI ? (
+            <button
+              onClick={cancelGeneration}
+              className="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded-lg transition"
+              title="Detener generación"
+              aria-label="Detener generación"
+            >
+              ⏹ Detener
+            </button>
+          ) : (
+            <button
+              onClick={() => sendMessage()}
+              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition"
+            >
+              Enviar
+            </button>
+          )}
           <div className="flex gap-1.5">
             <button
               onClick={() => undoLastMessage()}

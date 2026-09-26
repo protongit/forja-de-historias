@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useGame } from '../context/useGame'
 import { PRESET_AVENTURAS, type PresetAdventure } from '../data/presetAdventures'
 import { initialStats } from '../context/gameReducer'
+import { loadGame, AUTO_SAVE_SLOT } from '../services/storageService'
 import type { GameState, JournalEntry, Message, WorldState } from '../types/game'
 
 const initialWorldState: WorldState = {
@@ -103,6 +104,20 @@ export default function PresetAdventurePicker({ onBack, onStartCustom, onStart, 
   const [quickClass, setQuickClass] = useState('')
   const [quickName, setQuickName] = useState('')
 
+  const autosave = useMemo(
+    () => (state.currentUser ? loadGame(state.currentUser, AUTO_SAVE_SLOT) : null),
+    [state.currentUser]
+  )
+
+  function handleContinueAutosave() {
+    if (!autosave) return
+    dispatch({
+      type: 'LOAD_STATE',
+      state: { ...autosave, aiConfig: state.aiConfig, imageConfig: state.imageConfig, tts: state.tts, currentUser: state.currentUser, configsRestored: true },
+    })
+    onStart?.()
+  }
+
   function handleSelect(preset: PresetAdventure) {
     setSelected(preset.id)
   }
@@ -126,8 +141,7 @@ export default function PresetAdventurePicker({ onBack, onStartCustom, onStart, 
     onStart?.()
   }
 
-  function handleQuickSetup() {
-    const answers: Record<string, string> = {
+  function handleQuickSetup() {    const answers: Record<string, string> = {
       ambientacion: quickGenre || QUICK_SETUP_OPTIONS.generos[Math.floor(Math.random() * QUICK_SETUP_OPTIONS.generos.length)],
       ficha: 'Ficha detallada',
       clase: quickClass || QUICK_SETUP_OPTIONS.clases[Math.floor(Math.random() * QUICK_SETUP_OPTIONS.clases.length)],
@@ -157,6 +171,22 @@ export default function PresetAdventurePicker({ onBack, onStartCustom, onStart, 
       <p className="text-gray-400 text-sm mb-6">
         Elige una aventura lista para jugar. No necesitas configurar nada — el personaje, la misión y el mundo ya están preparados.
       </p>
+      {autosave && (
+        <div className="mb-6 p-4 rounded-xl border border-green-700/60 bg-green-900/20 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-green-300">📖 Tienes una partida en curso</p>
+            <p className="text-xs text-gray-400 truncate">
+              {autosave.adventureName || autosave.quest?.title || 'Aventura'} · Nivel {autosave.level} · {autosave.messages.length} mensajes
+            </p>
+          </div>
+          <button
+            onClick={handleContinueAutosave}
+            className="shrink-0 px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition"
+          >
+            ▶ Continuar
+          </button>
+        </div>
+      )}
       <div className="grid gap-4 sm:grid-cols-2">
         {PRESET_AVENTURAS.map((p) => (
           <button

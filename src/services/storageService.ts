@@ -3,6 +3,8 @@ import { userDataKey } from './authService'
 
 const SAVE_VERSION = 1
 
+export const AUTO_SAVE_SLOT = 'autosave'
+
 function slotKey(username: string | null, slot: string): string {
   return username ? userDataKey(username, `save-${slot}`) : `forja-de-historias-save-${slot}`
 }

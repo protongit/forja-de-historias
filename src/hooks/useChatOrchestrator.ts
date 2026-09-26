@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import type { Dispatch } from 'react'
 import { useGame } from '../context/useGame'
 import { sendChatStream } from '../services/aiService'
@@ -28,52 +28,43 @@ function addLogEntry(playerMsg: string, raw: string, cleaned: string, phase: str
   dispatch({ type: 'ADD_LOG_ENTRY', entry })
 }
 
-function dispatchPhaseTransition(aiResponse: string, result: ProcessedResponse, dispatch: Dispatch<GameAction>): { transition: string; messageId: string | null } {
+function dispatchPhaseTransition(aiResponse: string, result: ProcessedResponse, dispatch: Dispatch<GameAction>, placeholderId: string | null): { transition: string; messageId: string | null } {
+  const putGmMessage = (content: string): string => {
+    if (placeholderId) {
+      dispatch({ type: 'UPDATE_MESSAGE_CONTENT', id: placeholderId, content })
+      return placeholderId
+    }
+    const id = crypto.randomUUID()
+    dispatch({ type: 'ADD_MESSAGE', message: { id, sender: 'gm', content, timestamp: Date.now() } })
+    return id
+  }
   const hasCommand = (cmd: string) => new RegExp(`\\[{1,2}${cmd}\\]{1,2}`).test(aiResponse)
   if (hasCommand('SETUP_COMPLETE')) {
-    const finalText = result.cleaned
-    const id = crypto.randomUUID()
-    dispatch({
-      type: 'ADD_MESSAGE',
-      message: { id, sender: 'gm', content: cleanContentMarkers(finalText), timestamp: Date.now() },
-    })
+    const id = putGmMessage(cleanContentMarkers(result.cleaned))
     dispatch({ type: 'SET_PHASE', phase: 'generation' })
     return { transition: 'setup-complete', messageId: id }
   }
   if (hasCommand('GENERATION_COMPLETE')) {
-    const finalText = result.cleaned
     dispatch({
       type: 'ADD_MESSAGE',
       message: { id: crypto.randomUUID(), sender: 'system', content: '🌟 Tu personaje y misión han sido creados. ¡La aventura comienza!', timestamp: Date.now() },
     })
-    const id = crypto.randomUUID()
-    dispatch({
-      type: 'ADD_MESSAGE',
-      message: { id, sender: 'gm', content: cleanContentMarkers(finalText), timestamp: Date.now() },
-    })
+    const id = putGmMessage(cleanContentMarkers(result.cleaned))
     return { transition: 'generation-complete', messageId: id }
   }
   if (hasCommand('QUEST_COMPLETE')) {
-    const finalText = result.cleaned
-    const id = crypto.randomUUID()
-    dispatch({
-      type: 'ADD_MESSAGE',
-      message: { id, sender: 'gm', content: cleanContentMarkers(finalText), timestamp: Date.now() },
-    })
+    const id = putGmMessage(cleanContentMarkers(result.cleaned))
     dispatch({
       type: 'ADD_MESSAGE',
       message: { id: crypto.randomUUID(), sender: 'system', content: '🏆 ¡Aventura completada! Gracias por jugar.', timestamp: Date.now() },
     })
     dispatch({ type: 'SET_PHASE', phase: 'completed' })
+    const finalText = result.cleaned
     const isSuccess = finalText.includes('éxito') || finalText.includes('victoria') || !finalText.includes('fracaso')
     dispatch({ type: 'SET_ADVENTURE_RESULT', result: isSuccess ? 'success' : 'failure' })
     return { transition: 'quest-complete', messageId: id }
   }
-  const id = crypto.randomUUID()
-  dispatch({
-    type: 'ADD_MESSAGE',
-    message: { id, sender: 'gm', content: cleanContentMarkers(result.cleaned), timestamp: Date.now() },
-  })
+  const id = putGmMessage(cleanContentMarkers(result.cleaned))
   return { transition: 'normal', messageId: id }
 }
 
@@ -145,6 +136,7 @@ function parseCharacterAndQuest(text: string, dispatch: Dispatch<GameAction>) {
 
 export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }: UseChatOrchestratorOptions = {}) {
   const { state, dispatch } = useGame()
+  const abortRef = useRef<AbortController | null>(null)
 
   async function sendMessage(text?: string, attachmentsIn?: AttachmentInput[]) {
     const content = text ?? ''
@@ -170,8 +162,19 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
     dispatch({ type: 'SET_WAITING_AI', waiting: true })
     dispatch({ type: 'SET_ERROR', error: null })
 
+    const controller = new AbortController()
+    abortRef.current = controller
+    const currentPhase = state.phase
+    const placeholderId = currentPhase === 'generation' ? null : crypto.randomUUID()
+    if (placeholderId) {
+      dispatch({
+        type: 'ADD_MESSAGE',
+        message: { id: placeholderId, sender: 'gm', content: '', timestamp: Date.now() },
+      })
+    }
+    let lastFlush = 0
+
     try {
-      const currentPhase = state.phase
       const systemPrompt = buildSystemPrompt(currentPhase, state.tts.enabled, state.combatMode)
       const charContext = buildCharContext(state)
 
@@ -181,7 +184,21 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
       }
       const allMessages: GameMessage[] = [...state.messages, pendingMsg]
 
-      const aiResponse = await sendChatStream(state.aiConfig, systemPrompt, allMessages, charContext)
+      const aiResponse = await sendChatStream(state.aiConfig, systemPrompt, allMessages, charContext, {
+        signal: controller.signal,
+        onDelta: (accumulated) => {
+          if (!placeholderId) return
+          const now = Date.now()
+          if (now - lastFlush < 80) return
+          lastFlush = now
+          dispatch({ type: 'UPDATE_MESSAGE_CONTENT', id: placeholderId, content: accumulated })
+        },
+      })
+
+      if (controller.signal.aborted && placeholderId) {
+        dispatch({ type: 'UPDATE_MESSAGE_CONTENT', id: placeholderId, content: aiResponse })
+      }
+
       const result = processRawResponse(aiResponse, state.level)
 
       addLogEntry(content, aiResponse, result.cleaned, currentPhase, dispatch)
@@ -190,7 +207,15 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
         dispatch(action)
       }
 
-      const { transition, messageId } = dispatchPhaseTransition(aiResponse, result, dispatch)
+      const { transition, messageId } = dispatchPhaseTransition(aiResponse, result, dispatch, placeholderId)
+
+      if (controller.signal.aborted) {
+        dispatch({
+          type: 'ADD_MESSAGE',
+          message: { id: crypto.randomUUID(), sender: 'system', content: '⏹ Generación detenida por el jugador.', timestamp: Date.now() },
+        })
+        return
+      }
 
       if (transition === 'setup-complete') {
         dispatch({ type: 'SET_WAITING_AI', waiting: false })
@@ -227,7 +252,20 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
         }
       }
     } catch (err) {
+      if (controller.signal.aborted) {
+        if (placeholderId) {
+          dispatch({ type: 'DELETE_MESSAGE', id: placeholderId })
+        }
+        dispatch({
+          type: 'ADD_MESSAGE',
+          message: { id: crypto.randomUUID(), sender: 'system', content: '⏹ Generación detenida por el jugador.', timestamp: Date.now() },
+        })
+        return
+      }
       const errorMsg = err instanceof Error ? err.message : 'Error al comunicarse con la IA'
+      if (placeholderId) {
+        dispatch({ type: 'DELETE_MESSAGE', id: placeholderId })
+      }
       dispatch({ type: 'SET_ERROR', error: errorMsg })
       dispatch({
         type: 'ADD_MESSAGE',
@@ -239,6 +277,7 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
         },
       })
     } finally {
+      abortRef.current = null
       dispatch({ type: 'SET_WAITING_AI', waiting: false })
     }
   }
@@ -271,8 +310,12 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
     const pendingMsg: GameMessage = { id: 'pending', sender: 'player', content: lastPlayerMsg.content, timestamp: Date.now() }
     const allMessages: GameMessage[] = [...beforePlayer, ...afterAi, pendingMsg]
 
-    sendChatStream(state.aiConfig, systemPrompt, allMessages, charContext)
+    const controller = new AbortController()
+    abortRef.current = controller
+
+    sendChatStream(state.aiConfig, systemPrompt, allMessages, charContext, { signal: controller.signal })
       .then((aiResponse) => {
+        if (controller.signal.aborted) return
         const result = processRawResponse(aiResponse, state.level)
         addLogEntry(`(deshacer) ${lastPlayerMsg.content}`, aiResponse, result.cleaned, currentPhase, dispatch)
 
@@ -280,12 +323,13 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
           dispatch(action)
         }
 
-        const { messageId } = dispatchPhaseTransition(aiResponse, result, dispatch)
+        const { messageId } = dispatchPhaseTransition(aiResponse, result, dispatch, null)
         if (messageId) {
           handlePendingImages(result, state.imageConfig, messageId, dispatch)
         }
       })
       .catch((err) => {
+        if (controller.signal.aborted) return
         const errorMsg = err instanceof Error ? err.message : 'Error al comunicar con la IA'
         dispatch({ type: 'SET_ERROR', error: errorMsg })
         dispatch({
@@ -293,7 +337,10 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
           message: { id: crypto.randomUUID(), sender: 'system', content: `Error: ${errorMsg}`, timestamp: Date.now() },
         })
       })
-      .finally(() => dispatch({ type: 'SET_WAITING_AI', waiting: false }))
+      .finally(() => {
+        abortRef.current = null
+        dispatch({ type: 'SET_WAITING_AI', waiting: false })
+      })
   }
 
   async function generateAdventure(setupAnswersOverride?: Record<string, string>) {
@@ -348,5 +395,9 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quickSetupAnswers, state.phase, state.isWaitingAI])
 
-  return { sendMessage, undoLastMessage }
+  function cancelGeneration() {
+    abortRef.current?.abort()
+  }
+
+  return { sendMessage, undoLastMessage, cancelGeneration }
 }
