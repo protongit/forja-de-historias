@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { processRawResponse, cleanBracketCommands, cleanContentMarkers, parseStats, parseSkills } from './commandCleaner'
+import { processRawResponse, cleanBracketCommands, cleanContentMarkers, parseStats, parseSkills, sanitizeStreamingText } from './commandCleaner'
 
 describe('cleanBracketCommands', () => {
   it('elimina comandos con corchetes simples y dobles', () => {
@@ -181,5 +181,28 @@ describe('proceso de [[IMAGE]] (variantes de modelos pequeños)', () => {
   it('deduplica prompts repetidos', () => {
     const r = processRawResponse('[[IMAGE: castillo]] ... [[IMAGE: castillo]]', 1)
     expect(r.pendingImages.length).toBe(1)
+  })
+})
+
+describe('sanitizeStreamingText', () => {
+  it('oculta comandos completos durante el streaming', () => {
+    const out = sanitizeStreamingText('Coges la espada. [[ADD_ITEM: espada]] Y sigues. [[TONE: epico]]')
+    expect(out).toBe('Coges la espada.  Y sigues.')
+  })
+
+  it('corta en un marcador incompleto', () => {
+    const out = sanitizeStreamingText('Narración aquí. [[DICE_CHECK: stat: Fuerza, dc: 1')
+    expect(out).toBe('Narración aquí.')
+  })
+
+  it('oculta marcadores de imagen multilínea y con $', () => {
+    expect(sanitizeStreamingText('Texto [[$DICE_CHECK: stat: Fuerza, dc: 14, dice: d12]]')).toBe('Texto')
+    expect(sanitizeStreamingText('Final [[IMAGE: una torre\nbajo la lluvia]]')).toBe('Final')
+  })
+
+  it('$DICE_CHECK se parsea y lanza el dado', () => {
+    const r = processRawResponse('Lo intentas. [[$DICE_CHECK: stat: Fuerza, dc: 14, dice: d12]]', 1)
+    expect(r.actions.some((a) => a.type === 'SET_DICE_CHECK')).toBe(true)
+    expect(r.cleaned).not.toContain('DICE_CHECK')
   })
 })

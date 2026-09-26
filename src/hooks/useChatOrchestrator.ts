@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { Dispatch } from 'react'
 import { useGame } from '../context/useGame'
 import { sendChatStream } from '../services/aiService'
-import { processRawResponse, cleanContentMarkers, parseStats, parseSkills } from '../utils/commandCleaner'
+import { processRawResponse, cleanContentMarkers, parseStats, parseSkills, sanitizeStreamingText } from '../utils/commandCleaner'
 import type { ProcessedResponse } from '../utils/commandCleaner'
 import { shouldSummarize, getMessagesToSummarize, summarizeMessages, buildSummaryMessage } from '../utils/contextSummarizer'
 import { buildSystemPrompt, buildCharContext, resolveToneEmotion } from '../utils/charContext'
@@ -206,12 +206,12 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
           const now = Date.now()
           if (now - lastFlush < 80) return
           lastFlush = now
-          dispatch({ type: 'UPDATE_MESSAGE_CONTENT', id: placeholderId, content: accumulated })
+          dispatch({ type: 'UPDATE_MESSAGE_CONTENT', id: placeholderId, content: sanitizeStreamingText(accumulated) })
         },
       })
 
       if (controller.signal.aborted && placeholderId) {
-        dispatch({ type: 'UPDATE_MESSAGE_CONTENT', id: placeholderId, content: aiResponse })
+        dispatch({ type: 'UPDATE_MESSAGE_CONTENT', id: placeholderId, content: sanitizeStreamingText(aiResponse) })
       }
 
       const result = processRawResponse(aiResponse, state.level)

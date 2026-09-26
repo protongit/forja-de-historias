@@ -60,11 +60,12 @@ export default function ChatInterface({ quickSetupAnswers, onQuickSetupConsumed 
     return el.scrollHeight - el.scrollTop - el.clientHeight < 200
   }
 
+  const lastMessageContent = state.messages[state.messages.length - 1]?.content
   useEffect(() => {
     if (state.messages.length === 0) return
     if (userScrolledUp.current && !isNearBottom()) return
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [state.messages.length, state.isWaitingAI, state.phase])
+    bottomRef.current?.scrollIntoView({ behavior: state.isWaitingAI ? 'auto' : 'smooth' })
+  }, [state.messages.length, lastMessageContent, state.isWaitingAI, state.phase])
 
   function handleScroll() {
     userScrolledUp.current = !isNearBottom()

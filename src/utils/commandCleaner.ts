@@ -27,7 +27,8 @@ export interface ProcessedResponse {
 
 export function processRawResponse(raw: string, currentLevel: number): ProcessedResponse {
   const actions: GameAction[] = []
-  let cleaned = raw
+  // Ciertos modelos alucinan un prefijo "$" en los comandos: [[$DICE_CHECK: ...]]
+  let cleaned = raw.replace(/([[［]{1,2})\s*\$\s*/g, '$1')
 
   // --- ITEM commands ---
   const addRegex = /\[{1,2}ADD_ITEM:\s*(.+?)\]{1,2}/gi
@@ -51,7 +52,7 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
   }
 
   // --- DICE command ---
-  const diceRegex = /\[{1,2}DICE_CHECK:\s*stat:\s*(.+?),\s*dc:\s*(\d+),\s*dice:\s*(d\d+)\]{1,2}/i
+  const diceRegex = /\[{1,2}DICE_CHECK[：:]\s*stat[：:]\s*(.+?),\s*dc[：:]\s*(\d+),\s*dice[：:]\s*(d\d+)\]{1,2}/i
   const diceMatch = cleaned.match(diceRegex)
   if (diceMatch) {
     actions.push({
@@ -340,4 +341,14 @@ export function parseSkills(text: string): CharacterSkill[] {
     const [name, ...desc] = line.split(':').map((s) => s.trim())
     return { name, description: desc.join(':') }
   })
+}
+
+// Borra comandos [[...]] completos y corta en marcadores aún incompletos,
+// para que el usuario nunca vea comandos crudos durante el streaming.
+export function sanitizeStreamingText(raw: string): string {
+  let t = raw.replace(/([[［]{1,2})\s*\$\s*/g, '$1')
+  t = t.replace(/[[［]{1,2}[A-Z_][A-Z0-9_ ]*(?:[：:][\s\S]*?)?[\]］]{1,2}/gi, '')
+  const openIdx = t.search(/[[［][^a-z0-9]/)
+  if (openIdx !== -1) t = t.slice(0, openIdx)
+  return t.replace(/\s+$/, '')
 }
