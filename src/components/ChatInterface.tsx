@@ -1,17 +1,34 @@
 import { useGame } from '../context/GameContext'
-import { useRef, useEffect, useState, useMemo, useCallback, forwardRef, useImperativeHandle } from 'react'
+import { useRef, useEffect, useState, useMemo, forwardRef, useImperativeHandle } from 'react'
 import Message from './Message'
 import GenerationSkeleton from './GenerationSkeleton'
-import { sendChatStream } from '../services/aiService'
-import { getSetupPrompt, getGamemasterPrompt, SYSTEM_PROMPTS } from '../utils/prompts'
-import { processRawResponse, parseStats, parseSkills, cleanContentMarkers } from '../utils/commandCleaner'
-import { shouldSummarize, getMessagesToSummarize, summarizeMessages, buildSummaryMessages } from '../utils/contextSummarizer'
-import type { ProcessedResponse } from '../utils/commandCleaner'
 import { speakMessageText } from '../services/ttsService'
-import { generateImage } from '../services/imageService'
 import { upsertGameStats } from '../services/statsService'
-import type { Message as GameMessage, RawLogEntry, GameState, TTSVoiceEmotion } from '../types/game'
+import { useChatOrchestrator } from '../hooks/useChatOrchestrator'
 import NotificationToast from './NotificationToast'
+
+interface SpeechRecognitionResultLike {
+  isFinal: boolean
+  length: number
+  [index: number]: { transcript: string }
+}
+
+interface SpeechRecognitionEventLike {
+  resultIndex: number
+  results: { length: number; [index: number]: SpeechRecognitionResultLike }
+}
+
+interface SpeechRecognitionLike {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  onresult: ((e: SpeechRecognitionEventLike) => void) | null
+  onerror: (() => void) | null
+  start(): void
+  stop(): void
+}
+
+type SpeechRecognitionLikeCtor = new () => SpeechRecognitionLike
 
 export interface ChatInputRef {
   sendMessage: (text?: string) => void
@@ -19,7 +36,6 @@ export interface ChatInputRef {
 }
 
 interface ChatInputProps {
-  onUndo: () => void
   quickSetupAnswers?: Record<string, string> | null
   onQuickSetupConsumed?: () => void
 }
@@ -34,26 +50,21 @@ export default function ChatInterface({ quickSetupAnswers, onQuickSetupConsumed 
   const userScrolledUp = useRef(false)
   useEffect(() => { startTime.current = Date.now() }, [])
 
-  const isNearBottom = useCallback(() => {
+  const isNearBottom = () => {
     const el = scrollContainerRef.current
     if (!el) return true
     return el.scrollHeight - el.scrollTop - el.clientHeight < 200
-  }, [])
+  }
 
   useEffect(() => {
     if (state.messages.length === 0) return
     if (userScrolledUp.current && !isNearBottom()) return
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [state.messages.length, state.isWaitingAI, state.phase, isNearBottom])
+  }, [state.messages.length, state.isWaitingAI, state.phase])
 
   function handleScroll() {
     userScrolledUp.current = !isNearBottom()
   }
-
-  useEffect(() => {
-    if (state.messages.length === 0) return
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [state.messages.length, state.isWaitingAI, state.phase])
 
   useEffect(() => {
     if (state.phase !== 'playing') return
@@ -69,9 +80,6 @@ export default function ChatInterface({ quickSetupAnswers, onQuickSetupConsumed 
       startTime.current = Date.now()
     }
   }, [state.phase])
-
-  // Handle quick setup: when answers are provided, start generation
-  // This is handled inside ChatInput via quickSetupAnswers prop
 
   // Stats session: create on first playing, sync on changes
   const sentSession = useRef(false)
@@ -202,7 +210,7 @@ export default function ChatInterface({ quickSetupAnswers, onQuickSetupConsumed 
 
       {state.phase !== 'completed' && state.phase !== 'generation' && (
         <div className="p-3 border-t border-gray-700">
-          <ChatInput ref={chatInputRef} onUndo={() => chatInputRef.current?.undoLastMessage()} quickSetupAnswers={quickSetupAnswers} onQuickSetupConsumed={onQuickSetupConsumed} />
+          <ChatInput ref={chatInputRef} quickSetupAnswers={quickSetupAnswers} onQuickSetupConsumed={onQuickSetupConsumed} />
         </div>
       )}
       <NotificationToast />
@@ -210,261 +218,37 @@ export default function ChatInterface({ quickSetupAnswers, onQuickSetupConsumed 
   )
 }
 
-function buildSystemPrompt(phase: string, ttsEnabled: boolean, combatMode: string): string {
-  if (phase === 'setup') return getSetupPrompt(ttsEnabled)
-  if (phase === 'generation') return SYSTEM_PROMPTS.generation
-  return getGamemasterPrompt(combatMode === 'tactical')
+interface PendingAttachment {
+  type: 'image' | 'document'
+  data: string
+  mimeType: string
+  name: string
 }
 
-function buildCharContext(state: GameState): string {
-  const { character, quest, inventory, journal, enemies, companions, level, xp, combatActive, combatTurn, worldState, tts } = state
-  const parts: string[] = []
-
-  parts.push('## ESTADO ACTUAL DEL JUEGO')
-  parts.push('')
-
-  // --- NARRATIVE TONE ---
-  const TONE_LABELS: Record<string, string> = {
-    neutral: 'Neutral',
-    grave: 'Grave y misteriosa',
-    alegre: 'Alegre',
-    epico: 'Épica',
-    misterioso: 'Misteriosa',
-    susurro: 'Susurrante',
-    terrorifico: 'Terrorífica',
-  }
-  const TONE_INSTRUCTIONS: Record<string, string> = {
-    neutral: 'Narra con un tono neutral y equilibrado.',
-    grave: 'Narra con un tono grave y misterioso. Usa un lenguaje oscuro, pausado y lleno de presagios.',
-    alegre: 'Narra con un tono alegre y humorístico. Incluye situaciones cómicas, diálogos divertidos y un lenguaje ligero y desenfadado.',
-    epico: 'Narra con un tono épico y grandioso. Usa un lenguaje heroico, solemne y majestuoso. Las descripciones deben inspirar grandeza y emoción.',
-    misterioso: 'Narra con un tono misterioso e intrigante. Mantén un aire de incertidumbre y revela información con cuentagotas.',
-    susurro: 'Narra con un tono susurrante e íntimo. Usa descripciones detalladas y un ritmo pausado y envolvente.',
-    terrorifico: 'Narra con un tono terrorífico. Crea atmósferas de miedo, tensión y horror. Usa un lenguaje que genere angustia y desasosiego.',
-  }
-  const emotion = tts.emotion || 'neutral'
-  const label = TONE_LABELS[emotion] || 'Neutral'
-  const instruction = TONE_INSTRUCTIONS[emotion] || TONE_INSTRUCTIONS.neutral
-  parts.push('### TONO NARRATIVO')
-  parts.push(`- Tono seleccionado: ${label}`)
-  parts.push(`- Instrucción: ${instruction}`)
-  parts.push('')
-
-  // --- CHARACTER SHEET ---
-  if (character) {
-    parts.push('### FICHA DEL PERSONAJE')
-    parts.push(`- Nombre: ${character.name || 'Desconocido'}`)
-    parts.push(`- Nivel: ${level} | XP: ${xp}`)
-    if (character.maxHp > 0) parts.push(`- HP: ${character.hp}/${character.maxHp}`)
-    if (character.background) parts.push(`- Trasfondo: ${character.background}`)
-    if (character.traits?.length) parts.push(`- Rasgos: ${character.traits.join(', ')}`)
-    if (character.equipment?.length) parts.push(`- Equipo inicial: ${character.equipment.join(', ')}`)
-
-    if (character.stats?.length) {
-      parts.push('')
-      parts.push('#### Estadísticas')
-      parts.push(character.stats.map((s) => `${s.name}: ${s.value}`).join(', '))
-    }
-
-    if (character.skills?.length) {
-      parts.push('')
-      parts.push('#### Habilidades')
-      parts.push(character.skills.map((s) => `${s.name}: ${s.description}`).join(', '))
-    }
-    parts.push('')
-  }
-
-  // --- QUEST ---
-  if (quest) {
-    parts.push('### MISIÓN Y OBJETIVOS')
-    parts.push(`- Título: ${quest.title}`)
-    parts.push(`- Descripción: ${quest.description}`)
-    if (quest.objectives?.length) {
-      parts.push('')
-      parts.push('#### Objetivos')
-      quest.objectives.forEach((obj, i) => parts.push(`${i + 1}. ${obj.completed ? '✅' : '⬜'} ${obj.name}`))
-    }
-    parts.push('')
-  }
-
-  // --- INVENTORY ---
-  if (inventory?.length) {
-    parts.push('### INVENTARIO')
-    parts.push(inventory.join(', '))
-    parts.push('')
-  }
-
-  // --- JOURNAL ---
-  if (journal?.length) {
-    parts.push('### DIARIO DE AVENTURA')
-    for (const entry of journal) {
-      const date = new Date(entry.timestamp).toLocaleDateString('es-ES')
-      parts.push(`- [${date}] ${entry.title}: ${entry.summary} (${entry.eventType})`)
-    }
-    parts.push('')
-  }
-
-  // --- WORLD STATE ---
-  parts.push('### MUNDO')
-  parts.push(`- Ubicación actual: ${worldState.currentLocation || 'Desconocida'}`)
-  parts.push(`- Hora: ${worldState.timeOfDay}${worldState.weather ? ` | Clima: ${worldState.weather}` : ''}`)
-  if (worldState.locations.length) {
-    parts.push('')
-    parts.push('#### Ubicaciones descubiertas')
-    for (const loc of worldState.locations) {
-      const exits = loc.exits.length ? ` → ${loc.exits.join(', ')}` : ''
-      parts.push(`- ${loc.name}: ${loc.description}${exits}`)
-    }
-  }
-  if (worldState.npcs.length) {
-    parts.push('')
-    parts.push('#### NPCs conocidos')
-    for (const npc of worldState.npcs) {
-      if (!npc.isAlive) continue
-      const rel = npc.relationship >= 0 ? `+${npc.relationship}` : `${npc.relationship}`
-      parts.push(`- ${npc.name} (${npc.location}): ${npc.description} — Relación: ${rel}`)
-    }
-  }
-  parts.push('')
-
-  // --- COMBAT ---
-  if (combatActive && enemies?.length) {
-    parts.push('### COMBATE ACTIVO')
-    parts.push(`- Turno: ${combatTurn}`)
-    for (const enemy of enemies) {
-      if (enemy.isAlive) {
-        parts.push(`- ${enemy.name} (HP ${enemy.hp}/${enemy.maxHp}, AC ${enemy.ac})`)
-        if (enemy.description) parts.push(`  - ${enemy.description}`)
-      }
-    }
-    parts.push('')
-  }
-
-  // --- COMPANIONS ---
-  if (companions?.length) {
-    parts.push('### COMPAÑEROS')
-    for (const comp of companions) {
-      if (comp.isActive) {
-        const statsStr = comp.stats?.length ? comp.stats.map((s) => `${s.name}: ${s.value}`).join(', ') : ''
-        parts.push(`- ${comp.name}: ${comp.description}${statsStr ? ` — ${statsStr}` : ''}`)
-      }
-    }
-    parts.push('')
-  }
-
-  const output = parts.join('\n')
-  return output ? `\n\n${output}` : ''
-}
-
-function addLogEntry(playerMsg: string, raw: string, cleaned: string, phase: string, dispatch: React.Dispatch<any>) {
-  const entry: RawLogEntry = {
-    timestamp: Date.now(),
-    playerMessage: playerMsg,
-    rawResponse: raw,
-    cleanedResponse: cleaned,
-    phase,
-  }
-  dispatch({ type: 'ADD_LOG_ENTRY', entry })
-}
-
-const TONE_LABEL_TO_EMOTION: Record<string, string> = {
-  'Neutral': 'neutral',
-  'Grave y misteriosa': 'grave',
-  'Alegre': 'alegre',
-  'Épica': 'epico',
-  'Misteriosa': 'misterioso',
-  'Susurrante': 'susurro',
-  'Terrorífica': 'terrorifico',
-}
-
-function resolveToneEmotion(setupAnswers: Record<string, string> | undefined): string | null {
-  if (!setupAnswers) return null
-  const label = setupAnswers['tono_narrador']
-  if (!label) return null
-  return TONE_LABEL_TO_EMOTION[label] || null
-}
-
-function dispatchPhaseTransition(aiResponse: string, result: ProcessedResponse, dispatch: React.Dispatch<any>): { transition: string; messageId: string | null } {
-  const hasCommand = (cmd: string) => new RegExp(`\\[{1,2}${cmd}\\]{1,2}`).test(aiResponse)
-  if (hasCommand('SETUP_COMPLETE')) {
-    const finalText = result.cleaned
-    const id = crypto.randomUUID()
-    dispatch({
-      type: 'ADD_MESSAGE',
-      message: { id, sender: 'gm', content: cleanContentMarkers(finalText), timestamp: Date.now() },
-    })
-    dispatch({ type: 'SET_PHASE', phase: 'generation' })
-    return { transition: 'setup-complete', messageId: id }
-  }
-  if (hasCommand('GENERATION_COMPLETE')) {
-    const finalText = result.cleaned
-    dispatch({
-      type: 'ADD_MESSAGE',
-      message: { id: crypto.randomUUID(), sender: 'system', content: '🌟 Tu personaje y misión han sido creados. ¡La aventura comienza!', timestamp: Date.now() },
-    })
-    const id = crypto.randomUUID()
-    dispatch({
-      type: 'ADD_MESSAGE',
-      message: { id, sender: 'gm', content: cleanContentMarkers(finalText), timestamp: Date.now() },
-    })
-    return { transition: 'generation-complete', messageId: id }
-  }
-  if (hasCommand('QUEST_COMPLETE')) {
-    const finalText = result.cleaned
-    const id = crypto.randomUUID()
-    dispatch({
-      type: 'ADD_MESSAGE',
-      message: { id, sender: 'gm', content: cleanContentMarkers(finalText), timestamp: Date.now() },
-    })
-    dispatch({
-      type: 'ADD_MESSAGE',
-      message: { id: crypto.randomUUID(), sender: 'system', content: '🏆 ¡Aventura completada! Gracias por jugar.', timestamp: Date.now() },
-    })
-    dispatch({ type: 'SET_PHASE', phase: 'completed' })
-    const isSuccess = finalText.includes('éxito') || finalText.includes('victoria') || !finalText.includes('fracaso')
-    dispatch({ type: 'SET_ADVENTURE_RESULT', result: isSuccess ? 'success' : 'failure' })
-    return { transition: 'quest-complete', messageId: id }
-  }
-  const id = crypto.randomUUID()
-  dispatch({
-    type: 'ADD_MESSAGE',
-    message: { id, sender: 'gm', content: cleanContentMarkers(result.cleaned), timestamp: Date.now() },
-  })
-  return { transition: 'normal', messageId: id }
-}
-
-async function handlePendingImages(result: ProcessedResponse, imageConfig: GameState['imageConfig'], hostMessageId: string, _cleaned: string, dispatch: React.Dispatch<any>) {
-  if (!result.pendingImages?.length) return
-  if (!imageConfig.enabled) return
-
-  for (const { prompt } of result.pendingImages) {
-    try {
-      const url = await generateImage(imageConfig, prompt)
-      if (url) {
-        dispatch({
-          type: 'APPEND_MESSAGE_CONTENT',
-          id: hostMessageId,
-          content: `![${prompt}](${url})`,
-        })
-        dispatch({ type: 'INCREMENT_STAT', stat: 'imagesGenerated' })
-      }
-    } catch (err) {
-      dispatch({
-        type: 'ADD_MESSAGE',
-        message: {
-          id: crypto.randomUUID(),
-          sender: 'system',
-          content: `Error al generar imagen: ${err instanceof Error ? err.message : 'error desconocido'}`,
-          timestamp: Date.now(),
-        },
-      })
-    }
-  }
-}
-
-const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ onUndo, quickSetupAnswers, onQuickSetupConsumed }: ChatInputProps, ref) {
+const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ quickSetupAnswers, onQuickSetupConsumed }: ChatInputProps, ref) {
   const { state, dispatch } = useGame()
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const { sendMessage: sendToAI, undoLastMessage } = useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed })
+  const [recording, setRecording] = useState(false)
+  const [interimText, setInterimText] = useState('')
+  const [attachments, setAttachments] = useState<{ file: File; dataUrl: string }[]>([])
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const transcriptRef = useRef('')
+
+  function sendMessage(text?: string) {
+    const input = inputRef.current
+    const content = text ?? input?.value.trim() ?? ''
+    const pending: PendingAttachment[] = attachments.map((a) => ({
+      type: a.file.type.startsWith('image/') ? 'image' : 'document',
+      data: a.dataUrl,
+      mimeType: a.file.type,
+      name: a.file.name,
+    }))
+    if (!content && pending.length === 0) return
+    if (input) input.value = ''
+    setAttachments([])
+    void sendToAI(content, pending.length > 0 ? pending : undefined)
+  }
 
   useImperativeHandle(ref, () => ({
     sendMessage: (text?: string) => sendMessage(text),
@@ -493,278 +277,6 @@ const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ 
     }
   }
 
-  async function sendMessage(text?: string, attachmentsIn?: { type: string; data: string; mimeType: string; name: string }[]) {
-    const input = inputRef.current
-    const content = text ?? input?.value.trim() ?? ''
-
-    // Gather attachments from local state if none provided explicitly
-    let allAttachments = attachmentsIn
-    if (!allAttachments && attachments.length > 0) {
-      allAttachments = attachments.map((a) => ({
-        type: a.file.type.startsWith('image/') ? 'image' : 'document',
-        data: a.dataUrl,
-        mimeType: a.file.type,
-        name: a.file.name,
-      }))
-    }
-    if (!content && !allAttachments?.length) return
-
-    if (input) input.value = ''
-
-    const message: GameMessage = {
-      id: crypto.randomUUID(),
-      sender: 'player',
-      content,
-      timestamp: Date.now(),
-    }
-    if (allAttachments?.length) {
-      message.attachments = allAttachments.map((a) => ({
-        type: a.type as 'image' | 'document' | 'audio',
-        data: a.data,
-        mimeType: a.mimeType,
-        name: a.name,
-      }))
-    }
-    dispatch({ type: 'ADD_MESSAGE', message })
-    setAttachments([])
-
-    dispatch({ type: 'INCREMENT_STAT', stat: 'messagesSent' })
-
-    dispatch({ type: 'SET_WAITING_AI', waiting: true })
-    dispatch({ type: 'SET_ERROR', error: null })
-
-    try {
-      const currentPhase = state.phase
-      const systemPrompt = buildSystemPrompt(currentPhase, state.tts.enabled, state.combatMode)
-      const charContext = buildCharContext(state)
-
-      const pendingMsg: GameMessage = { id: 'pending', sender: 'player', content, timestamp: Date.now() }
-      if (allAttachments?.length) {
-        pendingMsg.attachments = allAttachments.map((a) => ({ type: a.type as 'image' | 'document' | 'audio', data: a.data, mimeType: a.mimeType, name: a.name }))
-      }
-      const allMessages: GameMessage[] = [...state.messages, pendingMsg]
-
-      const aiResponse = await sendChatStream(state.aiConfig, systemPrompt, allMessages, charContext)
-      const result = processRawResponse(aiResponse, state.level)
-
-      addLogEntry(content, aiResponse, result.cleaned, currentPhase, dispatch)
-
-      // Dispatch all parsed actions in batch
-      for (const action of result.actions) {
-        dispatch(action)
-      }
-
-      const { transition, messageId } = dispatchPhaseTransition(aiResponse, result, dispatch)
-
-      if (transition === 'setup-complete') {
-        dispatch({ type: 'SET_WAITING_AI', waiting: false })
-        await generateAdventure()
-        return
-      }
-      if (transition === 'generation-complete') {
-        parseCharacterAndQuest(result.cleaned)
-        const toneEmotion = resolveToneEmotion(state.setupAnswers)
-        if (toneEmotion) {
-          dispatch({ type: 'TTS_SET_EMOTION', emotion: toneEmotion as TTSVoiceEmotion })
-        }
-      }
-
-      if (messageId) {
-        await handlePendingImages(result, state.imageConfig, messageId, cleanContentMarkers(result.cleaned), dispatch)
-      }
-
-      // Trigger background summarization if conversation is too long
-      if (currentPhase === 'playing' && messageId) {
-        const msgs = state.messages
-        if (shouldSummarize(msgs.length)) {
-          const toSummarize = getMessagesToSummarize(msgs)
-          if (toSummarize.length > 5) {
-            summarizeMessages(state.aiConfig, toSummarize)
-              .then((summary) => {
-                const { keepFromIndex } = buildSummaryMessages(msgs)
-                dispatch({
-                  type: 'REPLACE_MESSAGES_WITH_SUMMARY',
-                  summaryMessage: {
-                    id: `summary-${Date.now()}`,
-                    sender: 'system',
-                    content: `[Resumen de eventos anteriores: ${summary}]`,
-                    timestamp: Date.now(),
-                  },
-                  keepFromIndex,
-                })
-              })
-              .catch(() => {
-                // Silently fail — summarization is optional
-              })
-          }
-        }
-      }
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Error al comunicarse con la IA'
-      dispatch({ type: 'SET_ERROR', error: errorMsg })
-      dispatch({
-        type: 'ADD_MESSAGE',
-        message: {
-          id: crypto.randomUUID(),
-          sender: 'system',
-          content: `Error: ${errorMsg}`,
-          timestamp: Date.now(),
-        },
-      })
-    } finally {
-      dispatch({ type: 'SET_WAITING_AI', waiting: false })
-    }
-  }
-
-  function undoLastMessage() {
-    if (state.isWaitingAI) return
-    const playerMsgs = state.messages.filter((m) => m.sender === 'player')
-    if (playerMsgs.length === 0) return
-
-    const lastPlayerMsg = playerMsgs[playerMsgs.length - 1]
-    const lastAiMsgIndex = state.messages.findIndex((m) => m.id === lastPlayerMsg.id)
-    if (lastAiMsgIndex === -1) return
-
-    const aiMsg = state.messages[lastAiMsgIndex + 1]
-    if (!aiMsg || aiMsg.sender === 'player') return
-
-    const afterAi = state.messages.slice(lastAiMsgIndex + 2)
-
-    for (const msg of [...afterAi, aiMsg]) {
-      dispatch({ type: 'DELETE_MESSAGE', id: msg.id })
-    }
-
-    dispatch({ type: 'SET_WAITING_AI', waiting: true })
-
-    const currentPhase = state.phase
-    const systemPrompt = buildSystemPrompt(currentPhase, state.tts.enabled, state.combatMode)
-    const charContext = buildCharContext(state)
-
-    const beforePlayer = state.messages.slice(0, lastAiMsgIndex)
-    const pendingMsg: GameMessage = { id: 'pending', sender: 'player', content: lastPlayerMsg.content, timestamp: Date.now() }
-    const allMessages: GameMessage[] = [...beforePlayer, ...afterAi, pendingMsg]
-
-    sendChatStream(state.aiConfig, systemPrompt, allMessages, charContext)
-      .then((aiResponse) => {
-        const result = processRawResponse(aiResponse, state.level)
-        addLogEntry(`(deshacer) ${lastPlayerMsg.content}`, aiResponse, result.cleaned, currentPhase, dispatch)
-
-        for (const action of result.actions) {
-          dispatch(action)
-        }
-
-        const { transition: _, messageId } = dispatchPhaseTransition(aiResponse, result, dispatch)
-        if (messageId) {
-          handlePendingImages(result, state.imageConfig, messageId, cleanContentMarkers(result.cleaned), dispatch)
-        }
-      })
-      .catch((err) => {
-        const errorMsg = err instanceof Error ? err.message : 'Error al comunicar con la IA'
-        dispatch({ type: 'SET_ERROR', error: errorMsg })
-        dispatch({
-          type: 'ADD_MESSAGE',
-          message: { id: crypto.randomUUID(), sender: 'system', content: `Error: ${errorMsg}`, timestamp: Date.now() },
-        })
-      })
-      .finally(() => dispatch({ type: 'SET_WAITING_AI', waiting: false }))
-  }
-
-  async function generateAdventure(setupAnswersOverride?: Record<string, string>) {
-    dispatch({ type: 'SET_WAITING_AI', waiting: true })
-    try {
-      const aiResponse = await sendChatStream(state.aiConfig, SYSTEM_PROMPTS.generation, state.messages)
-      const result = processRawResponse(aiResponse, state.level)
-
-      addLogEntry('(generación automática)', aiResponse, result.cleaned, 'generation', dispatch)
-
-      for (const action of result.actions) {
-        dispatch(action)
-      }
-
-      dispatch({
-        type: 'ADD_MESSAGE',
-        message: { id: crypto.randomUUID(), sender: 'system', content: '🌟 Tu personaje y misión han sido creados. ¡La aventura comienza!', timestamp: Date.now() },
-      })
-      const msgId = crypto.randomUUID()
-      dispatch({
-        type: 'ADD_MESSAGE',
-        message: { id: msgId, sender: 'gm', content: cleanContentMarkers(result.cleaned), timestamp: Date.now() },
-      })
-      parseCharacterAndQuest(result.cleaned)
-      dispatch({ type: 'SET_PHASE', phase: 'playing' })
-
-      // Set initial narrative tone from setup answers if available
-      const toneEmotion = resolveToneEmotion(setupAnswersOverride || state.setupAnswers)
-      if (toneEmotion) {
-        dispatch({ type: 'TTS_SET_EMOTION', emotion: toneEmotion as TTSVoiceEmotion })
-      }
-
-      await handlePendingImages(result, state.imageConfig, msgId, cleanContentMarkers(result.cleaned), dispatch)
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Error al generar la aventura'
-      dispatch({ type: 'SET_ERROR', error: errorMsg })
-      dispatch({
-        type: 'ADD_MESSAGE',
-        message: { id: crypto.randomUUID(), sender: 'system', content: `Error: ${errorMsg}`, timestamp: Date.now() },
-      })
-      throw err
-    } finally {
-      dispatch({ type: 'SET_WAITING_AI', waiting: false })
-    }
-  }
-
-  // Handle quick setup: when answers arrive during generation phase, trigger generation
-  useEffect(() => {
-    if (!quickSetupAnswers || state.phase !== 'generation' || state.isWaitingAI) return
-    dispatch({ type: 'SET_SETUP_ANSWERS', answers: quickSetupAnswers })
-    onQuickSetupConsumed?.()
-generateAdventure(quickSetupAnswers)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quickSetupAnswers, state.phase, state.isWaitingAI])
-
-  function parseCharacterAndQuest(text: string) {
-    const charMatch = text.match(/\[CHARACTER\]([\s\S]*?)\[\/CHARACTER\]/)
-    const questMatch = text.match(/\[QUEST\]([\s\S]*?)\[\/QUEST\]/)
-
-    const stats = parseStats(text)
-    const skills = parseSkills(text)
-
-    if (charMatch) {
-      const charText = charMatch[1].trim()
-      dispatch({
-        type: 'SET_CHARACTER',
-        character: {
-          name: extractField(charText, 'Nombre') || 'Aventurero',
-          background: extractField(charText, 'Trasfondo') || extractField(charText, 'Historia') || charText.slice(0, 200),
-          traits: extractList(charText, 'Rasgos'),
-          equipment: extractList(charText, 'Equipo'),
-          stats,
-          skills,
-          hp: 20,
-          maxHp: 20,
-        },
-      })
-    }
-
-    if (questMatch) {
-      const questText = questMatch[1].trim()
-      dispatch({
-        type: 'SET_QUEST',
-        quest: {
-          title: extractField(questText, 'Título') || extractField(questText, 'Misión') || 'La gran aventura',
-          description: extractField(questText, 'Descripción') || questText.slice(0, 200),
-          objectives: extractList(questText, 'Objetivos').map((o) => ({ name: o, completed: false })),
-        },
-      })
-    }
-  }
-
-  const [recording, setRecording] = useState(false)
-  const [interimText, setInterimText] = useState('')
-  const [attachments, setAttachments] = useState<{ file: File; dataUrl: string }[]>([])
-  const recognitionRef = useRef<any>(null)
-  const transcriptRef = useRef('')
-
   function handleFileAttach(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files
     if (!files?.length) return
@@ -790,8 +302,9 @@ generateAdventure(quickSetupAnswers)
 
   async function startRecording() {
     try {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-      if (!SpeechRecognition) {
+      const w = window as unknown as { SpeechRecognition?: SpeechRecognitionLikeCtor; webkitSpeechRecognition?: SpeechRecognitionLikeCtor }
+      const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition
+      if (!Ctor) {
         dispatch({ type: 'SET_ERROR', error: 'Tu navegador no soporta transcripción de voz' })
         return
       }
@@ -800,11 +313,11 @@ generateAdventure(quickSetupAnswers)
       setInterimText('')
       transcriptRef.current = ''
 
-      const recognition = new SpeechRecognition()
+      const recognition = new Ctor()
       recognition.lang = 'es-ES'
       recognition.continuous = true
       recognition.interimResults = true
-      recognition.onresult = (e: any) => {
+      recognition.onresult = (e: SpeechRecognitionEventLike) => {
         let interim = ''
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const result = e.results[i]
@@ -880,7 +393,7 @@ generateAdventure(quickSetupAnswers)
           </button>
           <div className="flex gap-1.5">
             <button
-              onClick={onUndo}
+              onClick={() => undoLastMessage()}
               disabled={state.isWaitingAI || state.messages.filter((m) => m.sender === 'player').length === 0}
               className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-700 border border-gray-500 text-gray-300 hover:bg-gray-600 hover:text-white transition disabled:opacity-30"
               title="Deshacer último mensaje"
@@ -910,33 +423,3 @@ generateAdventure(quickSetupAnswers)
     </div>
   )
 })
-
-function extractField(text: string, field: string): string | null {
-  const patterns = [
-    new RegExp(`\\*\\*${field}:?\\*\\*\\s*([^\\n]+)`, 'i'),
-    new RegExp(`\\*${field}:?\\*\\s*([^\\n]+)`, 'i'),
-    new RegExp(`${field}:?\\s*([^\\n]+)`, 'i'),
-  ]
-  for (const pattern of patterns) {
-    const match = text.match(pattern)
-    if (match) return match[1].trim()
-  }
-  return null
-}
-
-function extractList(text: string, field: string): string[] {
-  const patterns = [
-    new RegExp(`\\*\\*${field}:?\\*\\*([\\s\\S]*?)(?=\\n\\*\\*|$)`, 'i'),
-    new RegExp(`${field}:?([\\s\\S]*?)(?=\\n\\w+:|$)`, 'i'),
-  ]
-  for (const pattern of patterns) {
-    const match = text.match(pattern)
-    if (match) {
-      return match[1]
-        .split('\n')
-        .map((l) => l.replace(/^[-*]\s*/, '').trim())
-        .filter(Boolean)
-    }
-  }
-  return []
-}
