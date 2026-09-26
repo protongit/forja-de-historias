@@ -1,11 +1,10 @@
-import { useGame } from '../context/GameContext'
-import { useRef, useEffect, useState, useMemo, forwardRef, useImperativeHandle } from 'react'
+import { useGame } from '../context/useGame'
+import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react'
 import Message from './Message'
 import GenerationSkeleton from './GenerationSkeleton'
 import { speakMessageText } from '../services/ttsService'
 import { upsertGameStats } from '../services/statsService'
 import { useChatOrchestrator } from '../hooks/useChatOrchestrator'
-import NotificationToast from './NotificationToast'
 
 interface SpeechRecognitionResultLike {
   isFinal: boolean
@@ -30,6 +29,29 @@ interface SpeechRecognitionLike {
 
 type SpeechRecognitionLikeCtor = new () => SpeechRecognitionLike
 
+const PHASE_TOASTS: Record<string, string> = {
+  setup: 'Responde a las preguntas del Director de Juego para crear tu aventura.',
+  playing: 'Escribe qué quieres hacer, con quién hablar o adónde ir...',
+  generation: 'Generando tu aventura...',
+  completed: 'La aventura ha terminado. ¡Gracias por jugar!',
+}
+
+const LOADING_MESSAGE = { id: 'loading', sender: 'gm' as const, content: '', timestamp: 0 }
+
+function PhaseToast({ message }: { message: string }) {
+  const [visible, setVisible] = useState(true)
+  useEffect(() => {
+    const id = setTimeout(() => setVisible(false), 5000)
+    return () => clearTimeout(id)
+  }, [])
+  if (!visible) return null
+  return (
+    <div className="bg-indigo-900/60 border border-indigo-700 text-indigo-200 text-sm px-4 py-2 rounded-lg text-center animate-pulse">
+      {message}
+    </div>
+  )
+}
+
 export interface ChatInputRef {
   sendMessage: (text?: string) => void
   undoLastMessage: () => void
@@ -49,6 +71,15 @@ export default function ChatInterface({ quickSetupAnswers, onQuickSetupConsumed 
   const startTime = useRef<number>(0)
   const userScrolledUp = useRef(false)
   useEffect(() => { startTime.current = Date.now() }, [])
+
+  useEffect(() => {
+    function onPlayerAction(e: Event) {
+      const action = (e as CustomEvent<string>).detail
+      if (action) chatInputRef.current?.sendMessage(action)
+    }
+    window.addEventListener('fj:player-action', onPlayerAction)
+    return () => window.removeEventListener('fj:player-action', onPlayerAction)
+  }, [])
 
   const isNearBottom = () => {
     const el = scrollContainerRef.current
@@ -138,7 +169,7 @@ export default function ChatInterface({ quickSetupAnswers, onQuickSetupConsumed 
       result,
     }
     upsertGameStats(payload).catch(() => {})
-  }, [state.gameStats, state.phase, state.statsSessionId, state.level])
+  }, [state.gameStats, state.phase, state.statsSessionId, state.level, state.currentUser, state.adventureName, state.quest?.title])
 
   useEffect(() => {
     if (!state.tts.enabled || !state.tts.autoPlay) return
@@ -149,31 +180,12 @@ export default function ChatInterface({ quickSetupAnswers, onQuickSetupConsumed 
     speakMessageText(lastMsg.content, state.tts)
   }, [state.messages, state.isWaitingAI, state.tts])
 
-  const phaseMessages: Record<string, string> = useMemo(() => ({
-    setup: 'Responde a las preguntas del Director de Juego para crear tu aventura.',
-    playing: 'Escribe qué quieres hacer, con quién hablar o adónde ir...',
-    generation: 'Generando tu aventura...',
-    completed: 'La aventura ha terminado. ¡Gracias por jugar!',
-  }), [])
-
-  const [toast, setToast] = useState('')
-
-  useEffect(() => {
-    const msg = phaseMessages[state.phase]
-    if (!msg) return
-    setToast(msg)
-    const id = setTimeout(() => setToast(''), 5000)
-    return () => clearTimeout(id)
-  }, [state.phase, phaseMessages])
+  const phaseToast = PHASE_TOASTS[state.phase]
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto p-4 space-y-1" ref={scrollContainerRef} onScroll={handleScroll}>
-        {toast && (
-          <div className="bg-indigo-900/60 border border-indigo-700 text-indigo-200 text-sm px-4 py-2 rounded-lg text-center animate-pulse">
-            {toast}
-          </div>
-        )}
+        {phaseToast && <PhaseToast key={state.phase} message={phaseToast} />}
         {state.messages.map((msg) => (
           <div key={msg.id}>
             <Message
@@ -195,15 +207,7 @@ export default function ChatInterface({ quickSetupAnswers, onQuickSetupConsumed 
           <GenerationSkeleton />
         )}
         {state.isWaitingAI && state.phase !== 'generation' && (
-          <Message
-            message={{
-              id: 'loading',
-              sender: 'gm',
-              content: '',
-              timestamp: Date.now(),
-            }}
-            isLoading
-          />
+          <Message message={LOADING_MESSAGE} isLoading />
         )}
         <div ref={bottomRef} />
       </div>
@@ -213,7 +217,6 @@ export default function ChatInterface({ quickSetupAnswers, onQuickSetupConsumed 
           <ChatInput ref={chatInputRef} quickSetupAnswers={quickSetupAnswers} onQuickSetupConsumed={onQuickSetupConsumed} />
         </div>
       )}
-      <NotificationToast />
     </div>
   )
 }

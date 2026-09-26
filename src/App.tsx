@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useGame } from './context/GameContext'
+import { useGame } from './context/useGame'
 import SettingsPanel from './components/SettingsPanel'
 import ChatInterface from './components/ChatInterface'
 import SaveLoadPanel from './components/SaveLoadPanel'
@@ -81,11 +81,11 @@ export default function App() {
   }, [state.phase, dispatch])
 
   useEffect(() => {
-    if (!state.currentUser) return
-    if (state.phase !== 'config') return
+    if (!state.currentUser || state.phase !== 'config') return
 
-    if (state.currentUser.startsWith('invitado_')) {
-      setPage('preset')
+    const isGuest = state.currentUser.startsWith('invitado_')
+    if (isGuest) {
+      dispatch({ type: 'SET_CONFIGS_RESTORED', restored: true })
       return
     }
 
@@ -98,7 +98,7 @@ export default function App() {
     if (savedConfig && savedTTS) {
       dispatch({ type: 'SET_AI_CONFIG', config: savedConfig })
       dispatch({ type: 'SET_TTS_CONFIG', config: savedTTS })
-      setPage('preset')
+      dispatch({ type: 'SET_CONFIGS_RESTORED', restored: true })
     }
   }, [state.currentUser, state.phase, dispatch])
 
@@ -130,6 +130,14 @@ export default function App() {
 
   const hasNotifications = state.notifications.length > 0
 
+  const isGuestUser = !!state.currentUser?.startsWith('invitado_')
+  const autoPreset = state.phase === 'config' && !!state.currentUser && (isGuestUser || state.configsRestored)
+  const view: 'game' | 'leaderboard' | 'preset' | 'config' =
+    page === 'leaderboard' ? 'leaderboard'
+      : page === 'preset' || autoPreset ? 'preset'
+      : state.phase === 'config' ? 'config'
+      : 'game'
+
   if (!state.currentUser) {
     return (
       <div className="h-screen bg-gray-900 text-white flex flex-col">
@@ -159,7 +167,7 @@ export default function App() {
           {hasNotifications && (
             <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" aria-label="Notificaciones nuevas" />
           )}
-          {page !== 'leaderboard' && page !== 'preset' && (
+          {view !== 'leaderboard' && view !== 'preset' && (
             <button
               onClick={() => setPage('preset')}
               className="px-1.5 sm:px-2.5 py-1 rounded text-xs font-medium bg-gray-700 text-gray-400 hover:text-green-300 transition flex items-center gap-1"
@@ -169,7 +177,7 @@ export default function App() {
               🆕 <span className="hidden sm:inline">Nueva</span>
             </button>
           )}
-          {page !== 'leaderboard' && (
+          {view !== 'leaderboard' && (
             <button
               onClick={() => setPage('leaderboard')}
               className="px-1.5 sm:px-2.5 py-1 rounded text-xs font-medium bg-gray-700 text-gray-400 hover:text-yellow-300 transition flex items-center gap-1"
@@ -293,15 +301,11 @@ export default function App() {
         </div>
       </header>
 
-      {page === 'leaderboard' ? (
+      {view === 'leaderboard' ? (
         <div className="flex-1 overflow-y-auto">
-          <LeaderboardPage onBack={() => setPage(
-  state.currentUser?.startsWith('invitado_') && state.phase === 'config'
-    ? 'preset'
-    : 'game'
-)} />
+          <LeaderboardPage onBack={() => setPage('game')} />
         </div>
-      ) : page === 'preset' ? (
+      ) : view === 'preset' ? (
         <div className="flex-1 overflow-y-auto">
           <PresetAdventurePicker
             onStart={() => setPage('game')}
@@ -316,7 +320,7 @@ export default function App() {
             }}
           />
         </div>
-      ) : state.phase === 'config' ? (
+      ) : view === 'config' ? (
         <div className="flex-1 flex items-center justify-center p-4">
           <SettingsPanel />
         </div>

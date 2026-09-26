@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { useGame } from '../context/GameContext'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useGame } from '../context/useGame'
 import { sendChat } from '../services/aiService'
 import { cleanContentMarkers } from '../utils/commandCleaner'
 import { getGamemasterPrompt } from '../utils/prompts'
+import type { DiceCheck } from '../types/game'
 
 const DICE_COLORS: Record<string, string> = {
   d4: '#6366f1',
@@ -15,95 +16,56 @@ const DICE_COLORS: Record<string, string> = {
 }
 
 export default function DiceRollOverlay() {
-  const { state, dispatch } = useGame()
-  const [rolling, setRolling] = useState(false)
-  const [selected, setSelected] = useState('')
-  const [showSelector, setShowSelector] = useState(false)
-  const [result, setResult] = useState<number | null>(null)
-  const [success, setSuccess] = useState<boolean | null>(null)
-  const autoTriggered = useRef(false)
-
+  const { state } = useGame()
   const check = state.pendingDiceCheck
-  const charStats = state.character?.stats || []
-  const charSkills = state.character?.skills || []
-  const maxFaces = check ? parseInt(check.dice.replace('d', ''), 10) || 20 : 20
+  if (!check || check.resolved) return null
+  return <DiceRoll key={`${check.stat}-${check.dc}-${check.dice}`} check={check} />
+}
 
-  useEffect(() => {
-    if (!check) {
-      setResult(null)
-      setSuccess(null)
-      setRolling(false)
-      autoTriggered.current = false
-      return
-    }
-    setSelected(check.stat)
-    setResult(null)
-    setSuccess(null)
-    setShowSelector(false)
-  }, [check?.resolved === false ? check : null])
+function DiceRoll({ check }: { check: DiceCheck }) {
+  const { state, dispatch } = useGame()
+  const charStats = useMemo(() => state.character?.stats ?? [], [state.character])
+  const charSkills = useMemo(() => state.character?.skills ?? [], [state.character])
+  const maxFaces = useMemo(() => parseInt(check.dice.replace('d', ''), 10) || 20, [check.dice])
 
-  useEffect(() => {
-    if (!check || check.resolved) return
-    if (state.diceAutoRoll && !autoTriggered.current) {
-      autoTriggered.current = true
-      setRolling(true)
-    }
-  }, [check, state.diceAutoRoll])
+  const [rolling, setRolling] = useState(state.diceAutoRoll)
+  const [selected, setSelected] = useState(check.stat)
+  const [result, setResult] = useState<number | null>(null)
+  const [showSelector, setShowSelector] = useState(false)
+
+  const statBonus = charStats.find((s) => s.name === selected)?.value ?? 0
+  const total = result === null ? 0 : result + statBonus
+  const success = result === null ? null : total >= check.dc
 
   useEffect(() => {
     if (!rolling) return
     const delay = state.diceAutoRoll ? 2000 : 500
     const timer = setTimeout(() => {
-      const final = Math.floor(Math.random() * maxFaces) + 1
-      setResult(final)
+      setResult(Math.floor(Math.random() * maxFaces) + 1)
       setRolling(false)
     }, delay)
     return () => clearTimeout(timer)
   }, [rolling, maxFaces, state.diceAutoRoll])
 
+  const recorded = useRef(false)
   useEffect(() => {
-    if (result === null || success !== null) return
-    const statValue = charStats.find((s) => s.name === selected)?.value ?? 0
-    const bonus = statValue
-    const total = result + bonus
-    const isSuccess = total >= (check?.dc ?? 0)
-    setSuccess(isSuccess)
+    if (result === null || success === null || recorded.current) return
+    recorded.current = true
     dispatch({ type: 'INCREMENT_STAT', stat: 'diceRolls' })
-    dispatch({ type: 'INCREMENT_STAT', stat: isSuccess ? 'diceSuccesses' : 'diceFailures' })
-  }, [result, check, success, dispatch, charStats, selected])
+    dispatch({ type: 'INCREMENT_STAT', stat: success ? 'diceSuccesses' : 'diceFailures' })
+  }, [result, success, dispatch])
 
-  useEffect(() => {
-    if (result === null || success === null || !check || !state.diceAutoRoll) return
-    handleContinue()
-  }, [result, success, state.diceAutoRoll, check])
-
-  const handleRoll = useCallback(() => {
-    if (!check || rolling) return
-    setRolling(true)
-    setSuccess(null)
-    setResult(null)
-  }, [check, rolling])
-
-  function handleStatSelect(name: string) {
-    setSelected(name)
-    setShowSelector(false)
-  }
-
-  async function handleContinue() {
-    if (!check || result === null || success === null) return
-    const statValue = charStats.find((s) => s.name === selected)?.value ?? 0
-    const bonus = statValue
-    const total = result + bonus
-    const resultMsg = `🎲 ${selected} → ${result} + ${bonus} = ${total} (DC ${check.dc}) → ${success ? '✅ Éxito' : '❌ Fracaso'}`
+  const handleContinue = useCallback(() => {
+    if (result === null || success === null) return
+    const bonus = statBonus
+    const sum = result + bonus
+    const resultMsg = `🎲 ${selected} → ${result} + ${bonus} = ${sum} (DC ${check.dc}) → ${success ? '✅ Éxito' : '❌ Fracaso'}`
 
     dispatch({ type: 'SET_DICE_CHECK', check: null })
-    setResult(null)
-    setSuccess(null)
-
     dispatch({ type: 'ADD_MESSAGE', message: { id: crypto.randomUUID(), sender: 'system', content: resultMsg, timestamp: Date.now() } })
     dispatch({ type: 'SET_WAITING_AI', waiting: true })
 
-    const diceResultMsg = `[[DICE_RESULT: stat: ${selected}, valor: ${statValue}, bonus: ${bonus}, resultado: ${result}, total: ${total}, dc: ${check.dc}, ${success ? 'exito' : 'fracaso'}]]`
+    const diceResultMsg = `[[DICE_RESULT: stat: ${selected}, valor: ${statValue(selected)}, bonus: ${bonus}, resultado: ${result}, total: ${sum}, dc: ${check.dc}, ${success ? 'exito' : 'fracaso'}]]`
     const systemMessage = { id: crypto.randomUUID(), sender: 'system' as const, content: diceResultMsg, timestamp: Date.now() }
     const aiMessages = [...state.messages, systemMessage]
 
@@ -119,9 +81,33 @@ export default function DiceRollOverlay() {
       })
       .catch((err) => dispatch({ type: 'SET_ERROR', error: err.message }))
       .finally(() => dispatch({ type: 'SET_WAITING_AI', waiting: false }))
-  }
 
-  if (!check || check.resolved) return null
+    function statValue(name: string): number {
+      return charStats.find((s) => s.name === name)?.value ?? 0
+    }
+  }, [result, success, selected, statBonus, check.dc, state.messages, state.aiConfig, state.combatMode, state.character, dispatch, charStats])
+
+  const continueRef = useRef(handleContinue)
+  useEffect(() => {
+    continueRef.current = handleContinue
+  }, [handleContinue])
+
+  const autoContinued = useRef(false)
+  useEffect(() => {
+    if (result === null || success === null || !state.diceAutoRoll || autoContinued.current) return
+    autoContinued.current = true
+    continueRef.current()
+  }, [result, success, state.diceAutoRoll])
+
+  const handleRoll = useCallback(() => {
+    if (rolling || result !== null) return
+    setRolling(true)
+  }, [rolling, result])
+
+  function handleStatSelect(name: string) {
+    setSelected(name)
+    setShowSelector(false)
+  }
 
   const autoRolling = state.diceAutoRoll && rolling
   const diceColor = DICE_COLORS[check.dice] || '#6366f1'
@@ -219,7 +205,7 @@ export default function DiceRollOverlay() {
         {result !== null && success !== null && (
           <>
             <div className="text-sm text-gray-400 mb-1">
-              🎲 {result} + {charStats.find((s) => s.name === selected)?.value ?? 0} = {result + (charStats.find((s) => s.name === selected)?.value ?? 0)}
+              🎲 {result} + {statBonus} = {total}
             </div>
             <div className={`text-xl font-bold mb-4 ${success ? 'text-green-400' : 'text-red-400'}`}>
               {success ? '✅ ¡Éxito!' : '❌ Fracaso'}

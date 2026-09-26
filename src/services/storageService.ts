@@ -46,6 +46,25 @@ export function listSaveSlots(username: string | null): SaveSlot[] {
 
 function updateIndex(username: string | null, names: string[]) {
   localStorage.setItem(SAVE_INDEX_KEY(username), JSON.stringify(names))
+  notifySaveChange()
+}
+
+const saveListeners = new Set<() => void>()
+let storageHookInstalled = false
+
+function notifySaveChange() {
+  for (const listener of [...saveListeners]) listener()
+}
+
+export function subscribeSaveChanges(listener: () => void): () => void {
+  saveListeners.add(listener)
+  if (!storageHookInstalled && typeof window !== 'undefined') {
+    storageHookInstalled = true
+    window.addEventListener('storage', notifySaveChange)
+  }
+  return () => {
+    saveListeners.delete(listener)
+  }
 }
 
 // Attachments are base64 blobs that can blow up the localStorage quota — never persist them
@@ -79,6 +98,7 @@ export function saveGame(state: GameState, username: string | null, slot?: strin
   } catch {
     throw new Error('No se pudo guardar: almacenamiento lleno o no disponible')
   }
+  notifySaveChange()
   const raw = localStorage.getItem(SAVE_INDEX_KEY(username))
   const names: string[] = raw ? JSON.parse(raw) : []
   if (!names.includes(name)) {

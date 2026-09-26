@@ -1,29 +1,24 @@
 import { useRef, useCallback } from 'react'
-import { useGame } from '../context/GameContext'
+import { useGame } from '../context/useGame'
 import CollapsiblePanel from './CollapsiblePanel'
 
 export default function CombatPanel() {
   const { state, dispatch } = useGame()
   const cooldownRef = useRef(false)
 
+  const sendCombatAction = useCallback((action: string) => {
+    if (cooldownRef.current) return
+    cooldownRef.current = true
+    dispatch({ type: 'SET_COMBAT_TURN', turn: state.combatTurn + 1 })
+    window.dispatchEvent(new CustomEvent('fj:player-action', { detail: action }))
+    setTimeout(() => { cooldownRef.current = false }, 500)
+  }, [dispatch, state.combatTurn])
+
   if (!state.combatActive || state.enemies.length === 0) return null
 
   const aliveEnemies = state.enemies.filter((e) => e.isAlive)
   const totalEnemyHp = aliveEnemies.reduce((sum, e) => sum + e.hp, 0)
   const totalMaxHp = aliveEnemies.reduce((sum, e) => sum + e.maxHp, 0)
-
-  const sendCombatAction = useCallback((action: string) => {
-    if (cooldownRef.current) return
-    cooldownRef.current = true
-    dispatch({
-      type: 'ADD_MESSAGE',
-      message: { id: crypto.randomUUID(), sender: 'player', content: action, timestamp: Date.now() },
-    })
-    dispatch({ type: 'INCREMENT_STAT', stat: 'messagesSent' })
-    dispatch({ type: 'SET_WAITING_AI', waiting: true })
-    dispatch({ type: 'SET_COMBAT_TURN', turn: state.combatTurn + 1 })
-    setTimeout(() => { cooldownRef.current = false }, 500)
-  }, [dispatch, state.combatTurn])
 
   return (
     <CollapsiblePanel icon="⚔️" title="Combate" count={`Turno ${state.combatTurn}`} color="text-red-400" className="border border-red-700/50" aria-label="Panel de combate">

@@ -22,10 +22,28 @@ jobs:
 
       - name: Lint
         run: npm run lint
-        continue-on-error: true # hay errores pre-existentes; no bloquea hasta normalizarse
 
       - name: Tests
         run: npm test
 
       - name: Build
         run: npm run build
+
+      - name: Version bump check
+        if: github.event_name == 'pull_request' || github.event_name == 'push'
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: |
+          git fetch --no-tags --depth=50 origin main
+          if ! git cat-file -e "$BASE:package.json" 2>/dev/null; then
+            echo "Base '$BASE' no disponible; se omite el chequeo de versión."
+            exit 0
+          fi
+          base_version=$(git show "$BASE:package.json" | grep -m1 '"version"' | cut -d'"' -f4)
+          cur_version=$(node -p "require('./package.json').version")
+          changed=$(git diff --name-only "$BASE"...HEAD | grep -E '\.(ts|tsx|js|css)$' || true)
+          if [ -n "$changed" ] && [ "$base_version" = "$cur_version" ]; then
+            echo "::error::Hay archivos de código modificados pero la versión de package.json no se incrementó ($cur_version). Regla obligatoria (AGENTS.md)."
+            exit 1
+          fi
+          echo "Versión OK: $base_version -> $cur_version"

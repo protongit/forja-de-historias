@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type { Dispatch } from 'react'
-import { useGame } from '../context/GameContext'
+import { useGame } from '../context/useGame'
 import { sendChatStream } from '../services/aiService'
 import { processRawResponse, cleanContentMarkers, parseStats, parseSkills } from '../utils/commandCleaner'
 import type { ProcessedResponse } from '../utils/commandCleaner'
@@ -148,7 +148,7 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
 
   async function sendMessage(text?: string, attachmentsIn?: AttachmentInput[]) {
     const content = text ?? ''
-    let allAttachments = attachmentsIn
+    const allAttachments = attachmentsIn
     if (!content && !allAttachments?.length) return
 
     const message: GameMessage = {

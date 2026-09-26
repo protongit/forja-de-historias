@@ -188,6 +188,7 @@ export interface GameState {
   isWaitingAI: boolean
   isEphemeral: boolean
   currentUser: string | null
+  configsRestored?: boolean
   inventory: string[]
   notes: string
   rawLog: RawLogEntry[]
@@ -234,6 +235,7 @@ export type GameAction =
   | { type: 'SET_WAITING_AI'; waiting: boolean }
   | { type: 'SET_EPHEMERAL'; ephemeral: boolean }
   | { type: 'SET_USER'; username: string | null }
+  | { type: 'SET_CONFIGS_RESTORED'; restored: boolean }
   | { type: 'LOAD_STATE'; state: GameState }
   | { type: 'RESET' }
   | { type: 'ADD_ITEM'; item: string }

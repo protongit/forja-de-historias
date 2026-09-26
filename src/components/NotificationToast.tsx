@@ -1,5 +1,8 @@
-import { useGame } from '../context/GameContext'
-import { useEffect, useRef, useState } from 'react'
+import { useGame } from '../context/useGame'
+import { useEffect, useState } from 'react'
+import type { GameNotification } from '../types/game'
+import type { Dispatch } from 'react'
+import type { GameAction } from '../types/game'
 
 const NOTIFICATION_CONFIG = {
   xp: { icon: '✨', bg: 'bg-yellow-600/90', border: 'border-yellow-500' },
@@ -12,70 +15,46 @@ const NOTIFICATION_CONFIG = {
 }
 
 const DISMISS_AFTER_MS = 4000
+const EXIT_MS = 300
 
-const DISMISS_IDS = new Set<string>()
+function Toast({ notification, dispatch }: { notification: GameNotification; dispatch: Dispatch<GameAction> }) {
+  const [exiting, setExiting] = useState(false)
+  const { id, message, type } = notification
+
+  useEffect(() => {
+    const timer = setTimeout(() => setExiting(true), DISMISS_AFTER_MS)
+    return () => clearTimeout(timer)
+  }, [])
+
+  useEffect(() => {
+    if (!exiting) return
+    const timer = setTimeout(() => dispatch({ type: 'DISMISS_NOTIFICATION', id }), EXIT_MS)
+    return () => clearTimeout(timer)
+  }, [exiting, id, dispatch])
+
+  const config = NOTIFICATION_CONFIG[type as keyof typeof NOTIFICATION_CONFIG] || NOTIFICATION_CONFIG.system
+  return (
+    <div
+      className={`${config.bg} ${config.border} border text-white px-4 py-2.5 rounded-lg shadow-xl text-sm font-medium flex items-center gap-2 pointer-events-auto ${
+        exiting ? 'animate-[fadeOut_0.3s_ease-in_forwards]' : 'animate-[slideIn_0.3s_ease-out]'
+      }`}
+    >
+      <span className="text-base shrink-0">{config.icon}</span>
+      <span className="truncate">{message}</span>
+    </div>
+  )
+}
 
 export default function NotificationToast() {
   const { state, dispatch } = useGame()
-  const [visible, setVisible] = useState<{ id: string; message: string; type: string; exiting: boolean }[]>([])
-  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
-  useEffect(() => {
-    const currentIds = new Set(state.notifications.map((n) => n.id))
-
-    for (const [id, timer] of timersRef.current) {
-      if (!currentIds.has(id)) {
-        clearTimeout(timer)
-        timersRef.current.delete(id)
-      }
-    }
-
-    for (const n of state.notifications) {
-      if (timersRef.current.has(n.id)) continue
-      if (DISMISS_IDS.has(n.id)) continue
-
-      setVisible((prev) => [...prev, { id: n.id, message: n.message, type: n.type, exiting: false }])
-
-      const timer = setTimeout(() => {
-        setVisible((prev) => prev.map((v) => v.id === n.id ? { ...v, exiting: true } : v))
-        setTimeout(() => {
-          DISMISS_IDS.add(n.id)
-          setVisible((prev) => prev.filter((v) => v.id !== n.id))
-          dispatch({ type: 'DISMISS_NOTIFICATION', id: n.id })
-        }, 300)
-      }, DISMISS_AFTER_MS)
-
-      timersRef.current.set(n.id, timer)
-    }
-  }, [state.notifications, dispatch])
-
-  useEffect(() => {
-    return () => {
-      for (const timer of timersRef.current.values()) {
-        clearTimeout(timer)
-      }
-      timersRef.current.clear()
-    }
-  }, [])
-
-  if (visible.length === 0) return null
+  if (state.notifications.length === 0) return null
 
   return (
     <div className="fixed top-16 right-2 sm:right-4 z-40 flex flex-col gap-2 pointer-events-none" role="status" aria-live="polite">
-      {visible.map((v) => {
-        const config = NOTIFICATION_CONFIG[v.type as keyof typeof NOTIFICATION_CONFIG] || NOTIFICATION_CONFIG.system
-        return (
-          <div
-            key={v.id}
-            className={`${config.bg} ${config.border} border text-white px-4 py-2.5 rounded-lg shadow-xl text-sm font-medium flex items-center gap-2 pointer-events-auto ${
-              v.exiting ? 'animate-[fadeOut_0.3s_ease-in_forwards]' : 'animate-[slideIn_0.3s_ease-out]'
-            }`}
-          >
-            <span className="text-base shrink-0">{config.icon}</span>
-            <span className="truncate">{v.message}</span>
-          </div>
-        )
-      })}
+      {state.notifications.map((n) => (
+        <Toast key={n.id} notification={n} dispatch={dispatch} />
+      ))}
     </div>
   )
 }

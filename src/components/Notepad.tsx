@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useGame } from '../context/GameContext'
+import { useGame } from '../context/useGame'
 import { userDataKey } from '../services/authService'
 import CollapsiblePanel from './CollapsiblePanel'
 
@@ -7,16 +7,21 @@ export default function Notepad() {
   const { state, dispatch } = useGame()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const username = state.currentUser
+  const notesRef = useRef(state.notes)
+
+  useEffect(() => {
+    notesRef.current = state.notes
+  }, [state.notes])
 
   useEffect(() => {
     if (!username) return
     try {
       const saved = localStorage.getItem(userDataKey(username, 'notes'))
-      if (saved !== null && saved !== state.notes) {
+      if (saved !== null && saved !== notesRef.current) {
         dispatch({ type: 'SET_NOTES', notes: saved })
       }
     } catch { /* ignore */ }
-  }, [username])
+  }, [username, dispatch])
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const value = e.target.value

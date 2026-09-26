@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 *.tar.gz
 data/
+
+# opencode local state
+.opencode/

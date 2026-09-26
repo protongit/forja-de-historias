@@ -1,22 +1,22 @@
-import { useState, useRef, useEffect } from 'react'
-import { useGame } from '../context/GameContext'
-import { saveGame, loadGame, deleteSave, hasSave, exportGameToJSON, importGameFromJSON, listSaveSlots, type SaveSlot } from '../services/storageService'
+import { useState, useRef, useMemo, useSyncExternalStore, useCallback } from 'react'
+import { useGame } from '../context/useGame'
+import { saveGame, loadGame, deleteSave, hasSave, exportGameToJSON, importGameFromJSON, listSaveSlots, subscribeSaveChanges, type SaveSlot } from '../services/storageService'
 import CollapsiblePanel from './CollapsiblePanel'
 
 export default function SaveLoadPanel({ requestConfirm }: { requestConfirm?: (title: string, message: string, onConfirm: () => void, variant?: 'danger' | 'warning' | 'default', confirmLabel?: string, cancelLabel?: string) => void }) {
   const { state, dispatch } = useGame()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const username = state.currentUser
-  const [slots, setSlots] = useState<SaveSlot[]>([])
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [importing, setImporting] = useState(false)
 
-  useEffect(() => {
-    setSlots(listSaveSlots(username))
-  }, [username])
+  const subscribe = useCallback((cb: () => void) => subscribeSaveChanges(cb), [])
+  const getSnapshot = useCallback(() => JSON.stringify(listSaveSlots(username)), [username])
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  const slots = useMemo(() => JSON.parse(snapshot) as SaveSlot[], [snapshot])
 
   function handleSave() {
     const name = selectedSlot || prompt('Nombre de la partida:') || state.adventureName || 'default'
@@ -28,7 +28,6 @@ export default function SaveLoadPanel({ requestConfirm }: { requestConfirm?: (ti
         type: 'ADD_MESSAGE',
         message: { id: crypto.randomUUID(), sender: 'system', content: `Partida "${name}" guardada correctamente.`, timestamp: Date.now() },
       })
-      setSlots(listSaveSlots(username))
     } catch (err) {
       dispatch({
         type: 'ADD_MESSAGE',
@@ -66,7 +65,6 @@ export default function SaveLoadPanel({ requestConfirm }: { requestConfirm?: (ti
           type: 'ADD_MESSAGE',
           message: { id: crypto.randomUUID(), sender: 'system', content: `Partida "${name}" eliminada.`, timestamp: Date.now() },
         })
-        setSlots(listSaveSlots(username))
         setDeleting(false)
       },
       'danger',

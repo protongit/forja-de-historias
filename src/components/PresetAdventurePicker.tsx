@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useGame } from '../context/GameContext'
+import { useGame } from '../context/useGame'
 import { PRESET_AVENTURAS, type PresetAdventure } from '../data/presetAdventures'
-import { initialStats } from '../context/GameContext'
+import { initialStats } from '../context/gameReducer'
 import type { GameState, JournalEntry, Message, WorldState } from '../types/game'
 
 const initialWorldState: WorldState = {
@@ -84,6 +84,7 @@ function buildStateFromPreset(preset: PresetAdventure, username: string): GameSt
     statsSessionId: sessionId,
     saves: [],
     currentSaveSlot: username || null,
+    configsRestored: true,
   }
 }
 

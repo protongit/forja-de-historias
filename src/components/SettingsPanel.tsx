@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { useGame } from '../context/GameContext'
+import { useGame } from '../context/useGame'
 import { validateConnection } from '../services/aiService'
 import { userDataKey } from '../services/authService'
 import { getVoices } from '../services/ttsService'
 import { getProxyToken, setProxyToken } from '../services/proxyToken'
-import type { AIConfig, ImageConfig, TTSConfig } from '../types/game'
+import type { AIConfig, ImageConfig, TTSConfig, TTSVoiceEmotion } from '../types/game'
 
 function loadSavedConfig(username: string | null): AIConfig | null {
   if (!username) return null
@@ -63,15 +63,6 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
   const [testResult, setTestResult] = useState<'idle' | 'success' | 'error'>('idle')
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
   const [proxyToken, setProxyTokenState] = useState(getProxyToken())
-
-  useEffect(() => {
-    const saved = loadSavedConfig(state.currentUser)
-    if (saved) setConfig(saved)
-    const savedT = loadSavedTTS(state.currentUser)
-    if (savedT) setTTS(savedT)
-    const savedI = loadSavedImageConfig(state.currentUser)
-    if (savedI) setImageConfig(savedI)
-  }, [state.currentUser])
 
   useEffect(() => {
     const load = () => setVoices(getVoices())
@@ -136,7 +127,7 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
 
   const selectedVoice = voices.find((v) => v.voiceURI === tts.voice || v.name === tts.voice)
 
-  const emotionOptions = [
+  const emotionOptions: { value: TTSVoiceEmotion; label: string; icon: string; rate: number; pitch: number }[] = [
     { value: 'neutral', label: 'Neutral', icon: '😐', rate: 1.0, pitch: 1.0 },
     { value: 'grave', label: 'Grave y misteriosa', icon: '🎭', rate: 0.7, pitch: 0.6 },
     { value: 'alegre', label: 'Alegre', icon: '😊', rate: 1.3, pitch: 1.3 },
@@ -382,7 +373,7 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
                       <button
                         key={em.value}
                         onClick={() => {
-                          updateTTS({ emotion: em.value as any, rate: em.rate, pitch: em.pitch })
+                          updateTTS({ emotion: em.value, rate: em.rate, pitch: em.pitch })
                         }}
                         className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs text-left transition ${
                           tts.emotion === em.value

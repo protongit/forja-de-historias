@@ -81,7 +81,7 @@ function renderContent(text: string) {
   }
 
   if (lastIndex < text.length) {
-    parts.push({ type: 'text', value: text.slice(lastIndex), key: key++ })
+    parts.push({ type: 'text', value: text.slice(lastIndex), key })
   }
 
   if (parts.length === 0 || parts.every((p) => p.type === 'text')) {

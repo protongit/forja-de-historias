@@ -1,4 +1,4 @@
-import { useGame } from '../context/GameContext'
+import { useGame } from '../context/useGame'
 import { useState, useCallback } from 'react'
 import CollapsiblePanel from './CollapsiblePanel'
 
