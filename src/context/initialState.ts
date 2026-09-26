@@ -1,0 +1,85 @@
+import type { GameState, GameStats, WorldState } from '../types/game'
+import { getCurrentUser } from '../services/authService'
+
+export const initialWorldState: WorldState = {
+  currentLocation: null,
+  timeOfDay: 'mañana',
+  weather: null,
+  locations: [],
+  npcs: [],
+}
+
+export const initialStats: GameStats = {
+  messagesSent: 0,
+  diceRolls: 0,
+  diceSuccesses: 0,
+  diceFailures: 0,
+  enemiesDefeated: 0,
+  timePlayedMs: 0,
+  xpEarned: 0,
+  levelsGained: 0,
+  imagesGenerated: 0,
+  adventureResult: null,
+}
+
+export const initialState: GameState = {
+  phase: 'config',
+  aiConfig: {
+    endpoint: 'https://api.openai.com/v1',
+    apiKey: '',
+    model: 'gpt-4o-mini',
+    temperature: 0.8,
+  },
+  imageConfig: {
+    enabled: false,
+    endpoint: '',
+    apiKey: '',
+    model: 'flux-2-klein',
+    size: '1024x1024',
+  },
+  tts: {
+    enabled: false,
+    mode: 'browser',
+    endpoint: 'https://api.openai.com/v1',
+    apiKey: '',
+    model: 'tts-1',
+    voice: '',
+    rate: 1,
+    pitch: 1,
+    autoPlay: false,
+    emotion: 'neutral',
+  },
+  messages: [],
+  character: null,
+  quest: null,
+  setupAnswers: {},
+  aiModelInfo: '',
+  error: null,
+  isWaitingAI: false,
+  isEphemeral: true,
+  currentUser: getCurrentUser(),
+  inventory: [],
+  notes: '',
+  rawLog: [],
+  showLog: false,
+  pendingDiceCheck: null,
+  diceAutoRoll: true,
+
+  combatMode: 'narrative',
+  combatActive: false,
+  combatTurn: 0,
+  enemies: [],
+  xp: 0,
+  level: 1,
+  companions: [],
+  journal: [],
+  worldState: initialWorldState,
+  gameStats: initialStats,
+  notifications: [],
+  adventureName: '',
+  statsSessionId: null,
+  saves: [],
+  currentSaveSlot: null,
+  configsRestored: false,
+}
+

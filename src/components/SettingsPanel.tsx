@@ -1,55 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useGame } from '../context/useGame'
 import { validateConnection } from '../services/aiService'
-import { userDataKey } from '../services/authService'
+import { loadSavedConfig, saveConfig, loadSavedTTS, saveTTSConfig, loadSavedImageConfig, saveImageConfig } from '../services/configService'
 import { getVoices } from '../services/ttsService'
 import { getProxyToken, setProxyToken } from '../services/proxyToken'
 import type { AIConfig, ImageConfig, TTSConfig, TTSVoiceEmotion } from '../types/game'
-
-function loadSavedConfig(username: string | null): AIConfig | null {
-  if (!username) return null
-  try {
-    const raw = localStorage.getItem(userDataKey(username, 'ai-config'))
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
-
-function saveConfig(username: string | null, config: AIConfig): void {
-  if (!username) return
-  localStorage.setItem(userDataKey(username, 'ai-config'), JSON.stringify(config))
-}
-
-function loadSavedTTS(username: string | null): TTSConfig | null {
-  if (!username) return null
-  try {
-    const raw = localStorage.getItem(userDataKey(username, 'tts-config'))
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
-
-function saveTTSConfig(username: string | null, tts: TTSConfig): void {
-  if (!username) return
-  localStorage.setItem(userDataKey(username, 'tts-config'), JSON.stringify(tts))
-}
-
-function loadSavedImageConfig(username: string | null): ImageConfig | null {
-  if (!username) return null
-  try {
-    const raw = localStorage.getItem(userDataKey(username, 'image-config'))
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
-
-function saveImageConfig(username: string | null, config: ImageConfig): void {
-  if (!username) return
-  localStorage.setItem(userDataKey(username, 'image-config'), JSON.stringify(config))
-}
 
 export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
   const { state, dispatch } = useGame()

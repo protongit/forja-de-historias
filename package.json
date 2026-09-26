@@ -1,7 +1,7 @@
 {
   "name": "forja-de-historias",
   "private": true,
-  "version": "1.10.0",
+  "version": "1.11.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

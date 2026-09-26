@@ -1,8 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, lazy, Suspense } from 'react'
 import { useGame } from './context/useGame'
-import SettingsPanel from './components/SettingsPanel'
 import ChatInterface from './components/ChatInterface'
-import SaveLoadPanel from './components/SaveLoadPanel'
 import AuthPanel from './components/AuthPanel'
 import InventoryPanel from './components/InventoryPanel'
 import Notepad from './components/Notepad'
@@ -11,36 +9,20 @@ import CombatPanel from './components/CombatPanel'
 import CompanionPanel from './components/CompanionPanel'
 import JournalPanel from './components/JournalPanel'
 import GameStatsPanel from './components/GameStatsPanel'
-import DiceRollOverlay from './components/DiceRollOverlay'
 import LogPanel from './components/LogPanel'
-import LeaderboardPage from './components/LeaderboardPage'
-import PresetAdventurePicker from './components/PresetAdventurePicker'
 import NotificationToast from './components/NotificationToast'
 import ConfirmDialog from './components/ConfirmDialog'
 import { version } from './version'
+
+const SettingsPanel = lazy(() => import('./components/SettingsPanel'))
+const SaveLoadPanel = lazy(() => import('./components/SaveLoadPanel'))
+const DiceRollOverlay = lazy(() => import('./components/DiceRollOverlay'))
+const LeaderboardPage = lazy(() => import('./components/LeaderboardPage'))
+const PresetAdventurePicker = lazy(() => import('./components/PresetAdventurePicker'))
 import { getPhaseLabel } from './utils/gameEngine'
 import { stopSpeaking } from './services/ttsService'
-import { listUsers, userDataKey, logout, deleteAccount } from './services/authService'
-
-function loadSavedConfig(username: string | null) {
-  if (!username) return null
-  try {
-    const raw = localStorage.getItem(userDataKey(username, 'ai-config'))
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
-
-function loadSavedTTS(username: string | null) {
-  if (!username) return null
-  try {
-    const raw = localStorage.getItem(userDataKey(username, 'tts-config'))
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
+import { listUsers, logout, deleteAccount } from './services/authService'
+import { loadSavedConfig, loadSavedTTS } from './services/configService'
 
 type MobileTab = 'chat' | 'stats' | 'journal' | 'save'
 
@@ -303,10 +285,13 @@ export default function App() {
 
       {view === 'leaderboard' ? (
         <div className="flex-1 overflow-y-auto">
-          <LeaderboardPage onBack={() => setPage('game')} />
+          <Suspense fallback={null}>
+            <LeaderboardPage onBack={() => setPage('game')} />
+          </Suspense>
         </div>
       ) : view === 'preset' ? (
         <div className="flex-1 overflow-y-auto">
+          <Suspense fallback={null}>
           <PresetAdventurePicker
             onStart={() => setPage('game')}
             onStartCustom={() => {
@@ -319,10 +304,13 @@ export default function App() {
               dispatch({ type: 'SET_PHASE', phase: 'generation' })
             }}
           />
+          </Suspense>
         </div>
       ) : view === 'config' ? (
         <div className="flex-1 flex items-center justify-center p-4">
-          <SettingsPanel />
+          <Suspense fallback={null}>
+            <SettingsPanel />
+          </Suspense>
         </div>
       ) : isGamePhase ? (
         <div className="flex-1 flex overflow-hidden">
@@ -350,7 +338,7 @@ export default function App() {
             )}
             {mobileTab === 'save' && (
               <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 lg:hidden">
-                <SaveLoadPanel requestConfirm={requestConfirm} />
+                <Suspense fallback={null}><SaveLoadPanel requestConfirm={requestConfirm} /></Suspense>
                 <Notepad />
               </div>
             )}
@@ -365,12 +353,12 @@ export default function App() {
             <JournalPanel />
             <GameStatsPanel />
             <Notepad />
-            <SaveLoadPanel requestConfirm={requestConfirm} />
+            <Suspense fallback={null}><SaveLoadPanel requestConfirm={requestConfirm} /></Suspense>
           </aside>
         </div>
       ) : null}
 
-      <DiceRollOverlay />
+      <Suspense fallback={null}><DiceRollOverlay /></Suspense>
       <NotificationToast />
 
       <ConfirmDialog
@@ -446,7 +434,7 @@ export default function App() {
             >
               ✕
             </button>
-            <SettingsPanel onClose={() => setSettingsOpen(false)} />
+            <Suspense fallback={null}><SettingsPanel onClose={() => setSettingsOpen(false)} /></Suspense>
           </div>
         </div>
       )}
