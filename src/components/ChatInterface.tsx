@@ -67,6 +67,21 @@ export default function ChatInterface({ quickSetupAnswers, onQuickSetupConsumed 
     bottomRef.current?.scrollIntoView({ behavior: state.isWaitingAI ? 'auto' : 'smooth' })
   }, [state.messages.length, lastMessageContent, state.isWaitingAI, state.phase])
 
+  // Las imágenes se cargan de forma asíncrona (cambian la altura del contenido).
+  // Al terminar de cargar, desplazamos para que se vean completas junto con las
+  // opciones finales, salvo que el jugador haya subido a leer.
+  useEffect(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    function onImageLoad(e: Event) {
+      if ((e.target as HTMLElement | null)?.tagName !== 'IMG') return
+      if (userScrolledUp.current && !isNearBottom()) return
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+    el.addEventListener('load', onImageLoad, true)
+    return () => el.removeEventListener('load', onImageLoad, true)
+  }, [])
+
   function handleScroll() {
     userScrolledUp.current = !isNearBottom()
   }
