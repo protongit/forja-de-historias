@@ -20,6 +20,23 @@ export function cleanContentMarkers(text: string): string {
     .trim()
 }
 
+// Algunos proveedores devuelven avisos de moderación/error en inglés dentro del
+// texto de la respuesta. Los eliminamos y avisamos al jugador.
+const PROVIDER_NOTICE_REGEX = /^.*(?:request was rejected|considered high risk|content (?:policy|filter)|prohibited content|flagged as potentially).*$/gim
+
+export function stripProviderNotices(text: string): { text: string; rejected: boolean } {
+  let rejected = false
+  const out = text
+    .replace(/[⚑⚠]/g, '')
+    .replace(PROVIDER_NOTICE_REGEX, () => {
+      rejected = true
+      return ''
+    })
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  return { text: out, rejected }
+}
+
 let notifCounter = 0
 function notifId(): string {
   return `notif-${Date.now()}-${++notifCounter}`
@@ -339,6 +356,19 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
   cleaned = cleaned.replace(imagenRegex, '')
 
   cleaned = cleanBracketCommands(cleaned)
+  const notice = stripProviderNotices(cleaned)
+  cleaned = notice.text
+  if (notice.rejected) {
+    actions.push({
+      type: 'ADD_MESSAGE',
+      message: {
+        id: `sys-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        sender: 'system',
+        content: '⚠️ El proveedor de IA rechazó parte de la respuesta por moderación de contenido. La narración puede estar incompleta; puedes reintentar o reformular tu acción.',
+        timestamp: Date.now(),
+      },
+    })
+  }
   return { cleaned, actions, pendingImages }
 }
 

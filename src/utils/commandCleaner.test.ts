@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { processRawResponse, cleanBracketCommands, cleanContentMarkers, parseStats, parseSkills, sanitizeStreamingText } from './commandCleaner'
+import { processRawResponse, cleanBracketCommands, cleanContentMarkers, parseStats, parseSkills, sanitizeStreamingText, stripProviderNotices } from './commandCleaner'
 
 describe('cleanBracketCommands', () => {
   it('elimina comandos con corchetes simples y dobles', () => {
@@ -20,6 +20,21 @@ describe('cleanContentMarkers', () => {
 
   it('elimina marcadores sueltos sin bloque', () => {
     expect(cleanContentMarkers('Hola [/STATS] mundo')).toBe('Hola  mundo')
+  })
+})
+
+describe('stripProviderNotices', () => {
+  it('elimina el aviso de moderación y marca rejected', () => {
+    const r = stripProviderNotices('Narrativa épica.\n⚑ The request was rejected because it was considered high risk')
+    expect(r.rejected).toBe(true)
+    expect(r.text).not.toMatch(/high risk/i)
+    expect(r.text).toContain('Narrativa épica.')
+  })
+
+  it('no marca rejected en narración normal', () => {
+    const r = stripProviderNotices('El dragón ruge y el riesgo es alto.')
+    expect(r.rejected).toBe(false)
+    expect(r.text).toContain('El dragón ruge')
   })
 })
 
