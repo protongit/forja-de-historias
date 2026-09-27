@@ -34,11 +34,19 @@ function getUsers(): Record<string, User> {
 }
 
 function saveUsers(users: Record<string, User>): void {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users))
+  try {
+    localStorage.setItem(USERS_KEY, JSON.stringify(users))
+  } catch {
+    throw new Error('No se pudo guardar: almacenamiento lleno o no disponible')
+  }
 }
 
 export function getCurrentUser(): string | null {
-  return localStorage.getItem(CURRENT_USER_KEY)
+  try {
+    return localStorage.getItem(CURRENT_USER_KEY)
+  } catch {
+    return null
+  }
 }
 
 export function setCurrentUser(username: string | null): void {
@@ -68,7 +76,11 @@ export async function register(username: string, password: string): Promise<{ ok
 
   const passwordHash = simpleHash(password)
   users[trimmed] = { username: trimmed, passwordHash, createdAt: Date.now() }
-  saveUsers(users)
+  try {
+    saveUsers(users)
+  } catch {
+    return { ok: false, error: 'No se pudo crear la cuenta: almacenamiento no disponible' }
+  }
   setCurrentUser(trimmed)
   return { ok: true }
 }
@@ -90,7 +102,11 @@ export async function login(username: string, password: string): Promise<{ ok: b
 
   if (user.passwordHash !== passwordHash) {
     user.passwordHash = passwordHash
-    saveUsers(users)
+    try {
+      saveUsers(users)
+    } catch {
+      // No bloquear el login si no se puede re-hashear la clave
+    }
   }
 
   setCurrentUser(trimmed)

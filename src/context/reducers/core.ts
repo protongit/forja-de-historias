@@ -40,8 +40,11 @@ export function coreReducer(state: GameState, action: GameAction): GameState {
       return { ...state, inventory: state.inventory.filter((i) => i !== action.item) }
     case 'SET_NOTES':
       return { ...state, notes: action.notes }
-    case 'ADD_LOG_ENTRY':
-      return { ...state, rawLog: [...state.rawLog, action.entry] }
+    case 'ADD_LOG_ENTRY': {
+      const rawLog = [...state.rawLog, action.entry]
+      // Cota para no crecer sin límite (ni saturar localStorage en el autosave)
+      return { ...state, rawLog: rawLog.length > 50 ? rawLog.slice(-50) : rawLog }
+    }
     case 'TOGGLE_LOG':
       return { ...state, showLog: !state.showLog }
     case 'LOAD_STATE': {

@@ -294,7 +294,7 @@ app.post('/api/proxy/image', proxyLimiter, requireAuthToken, validateImageBody, 
 })
 
 // --- Stats API — upsert by session_id ---
-app.post('/api/stats', statsLimiter, (req, res) => {
+app.post('/api/stats', statsLimiter, requireAuthToken, (req, res) => {
   if (!db) return res.status(500).json({ error: 'Database not available' })
   try {
     const {

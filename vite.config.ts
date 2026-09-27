@@ -6,6 +6,14 @@ export default defineConfig({
   css: {
     transformer: 'postcss',
   },
+  server: {
+    proxy: {
+      '/api': {
+        target: process.env.BACKEND_URL || 'http://localhost:3000',
+        changeOrigin: true,
+      },
+    },
+  },
   define: {
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '0.0.0'),
   },

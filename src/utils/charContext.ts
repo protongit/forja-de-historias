@@ -1,5 +1,5 @@
 import { getSetupPrompt, getGamemasterPrompt, SYSTEM_PROMPTS } from './prompts'
-import type { GameState } from '../types/game'
+import type { GameState, WorldState } from '../types/game'
 
 export function buildSystemPrompt(phase: string, ttsEnabled: boolean, combatMode: string): string {
   if (phase === 'setup') return getSetupPrompt(ttsEnabled)
@@ -45,14 +45,22 @@ export function resolveToneEmotion(setupAnswers: Record<string, string> | undefi
 }
 
 export function buildCharContext(state: GameState): string {
-  const { character, quest, inventory, journal, enemies, companions, level, xp, combatActive, combatTurn, worldState, tts } = state
+  const { character, quest, inventory, journal, enemies, companions, level, xp, combatActive, combatTurn, tts } = state
+  // Tolerar guardados antiguos/importados incompletos (post-migración)
+  const worldState: WorldState = state.worldState ?? {
+    currentLocation: null,
+    timeOfDay: 'mañana',
+    weather: null,
+    locations: [],
+    npcs: [],
+  }
   const parts: string[] = []
 
   parts.push('## ESTADO ACTUAL DEL JUEGO')
   parts.push('')
 
   // --- NARRATIVE TONE ---
-  const emotion = tts.emotion || 'neutral'
+  const emotion = tts?.emotion || 'neutral'
   const label = TONE_LABELS[emotion] || 'Neutral'
   const instruction = TONE_INSTRUCTIONS[emotion] || TONE_INSTRUCTIONS.neutral
   parts.push('### TONO NARRATIVO')
@@ -163,7 +171,7 @@ export function buildCharContext(state: GameState): string {
   }
 
   // --- RECORDATORIO DE IMÁGENES ---
-  if (state.imageConfig.enabled) {
+  if (state.imageConfig?.enabled) {
     parts.push('### IMÁGENES — RECORDATORIO (OBLIGATORIO)')
     parts.push('Si en tu respuesta describes por PRIMERA VEZ una ubicación o un NPC (no están en las listas de "ya ilustrados"), o ocurre un momento clave, DEBES incluir [[IMAGE: descripción visual]] en tu texto.')
     const imagedLocs = worldState.locations.filter((l) => l.hasImage).map((l) => l.name)

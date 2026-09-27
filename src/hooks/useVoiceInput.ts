@@ -16,7 +16,8 @@ interface SpeechRecognitionLike {
   continuous: boolean
   interimResults: boolean
   onresult: ((e: SpeechRecognitionEventLike) => void) | null
-  onerror: (() => void) | null
+  onerror: ((e: { error?: string }) => void) | null
+  onend: (() => void) | null
   start(): void
   stop(): void
 }
@@ -43,6 +44,7 @@ export function useVoiceInput(onTranscript: (text: string) => void, onError?: (m
   })
 
   function start() {
+    if (recognitionRef.current) return
     void (async () => {
       try {
         const w = window as unknown as { SpeechRecognition?: SpeechRecognitionLikeCtor; webkitSpeechRecognition?: SpeechRecognitionLikeCtor }
@@ -74,10 +76,29 @@ export function useVoiceInput(onTranscript: (text: string) => void, onError?: (m
           interimRef.current = interim
           setInterimText(interim)
         }
-        recognition.onerror = () => {}
+        recognition.onerror = (e: { error?: string }) => {
+          recognitionRef.current = null
+          setRecording(false)
+          setInterimText('')
+          const map: Record<string, string> = {
+            'not-allowed': 'Permiso de micrófono denegado',
+            'service-not-allowed': 'Permiso de micrófono denegado',
+            'no-speech': 'No se detectó voz',
+            'audio-capture': 'No se encontró ningún micrófono',
+            network: 'Error de red en el reconocimiento de voz',
+          }
+          callbacksRef.current.onError?.(map[e?.error || ''] || 'Error en el reconocimiento de voz')
+        }
+        recognition.onend = () => {
+          if (recognitionRef.current === recognition) {
+            recognitionRef.current = null
+            setRecording(false)
+          }
+        }
         recognition.start()
         recognitionRef.current = recognition
       } catch {
+        setRecording(false)
         callbacksRef.current.onError?.('Error al iniciar grabación de audio')
       }
     })()

@@ -100,6 +100,16 @@ function migrateState(version: number, state: GameState): GameState {
   return migrated
 }
 
+function readIndex(username: string | null): string[] {
+  try {
+    const raw = localStorage.getItem(SAVE_INDEX_KEY(username))
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
 export function saveGame(state: GameState, username: string | null, slot?: string): void {
   const name = slot || 'default'
   const saveData: SaveData = { version: SAVE_VERSION, savedAt: Date.now(), state: stripAttachments(state) }
@@ -109,8 +119,7 @@ export function saveGame(state: GameState, username: string | null, slot?: strin
     throw new Error('No se pudo guardar: almacenamiento lleno o no disponible')
   }
   notifySaveChange()
-  const raw = localStorage.getItem(SAVE_INDEX_KEY(username))
-  const names: string[] = raw ? JSON.parse(raw) : []
+  const names = readIndex(username)
   if (!names.includes(name)) {
     names.push(name)
     updateIndex(username, names)
@@ -137,14 +146,14 @@ export function loadGame(username: string | null, slot?: string): GameState | nu
 export function deleteSave(username: string | null, slot?: string): void {
   const name = slot || 'default'
   localStorage.removeItem(slotKey(username, name))
-  const raw = localStorage.getItem(SAVE_INDEX_KEY(username))
-  const names: string[] = raw ? JSON.parse(raw) : []
+  const names = readIndex(username)
   const filtered = names.filter((n) => n !== name)
   updateIndex(username, filtered)
 }
 
-export function hasSave(username: string | null): boolean {
-  return localStorage.getItem(slotKey(username, 'default')) !== null
+export function hasSave(username: string | null, slot?: string): boolean {
+  if (slot) return localStorage.getItem(slotKey(username, slot)) !== null
+  return readIndex(username).some((name) => localStorage.getItem(slotKey(username, name)) !== null)
 }
 
 export function exportGameToJSON(state: GameState, slot?: string): void {
@@ -155,11 +164,18 @@ export function exportGameToJSON(state: GameState, slot?: string): void {
   a.href = url
   a.download = `forja-de-historias-${slot || 'export'}-${Date.now()}.json`
   a.click()
-  URL.revokeObjectURL(url)
+  // Revocar en el siguiente tick: algunos navegadores cancelan la descarga si se revoca de inmediato
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+
+const MAX_IMPORT_BYTES = 20 * 1024 * 1024
 
 export function importGameFromJSON(file: File): Promise<GameState> {
   return new Promise((resolve, reject) => {
+    if (file.size > MAX_IMPORT_BYTES) {
+      reject(new Error('El archivo es demasiado grande (máx. 20 MB)'))
+      return
+    }
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
@@ -168,7 +184,12 @@ export function importGameFromJSON(file: File): Promise<GameState> {
           reject(new Error('Archivo de guardado inválido'))
           return
         }
-        resolve(saveData.state)
+        const version = typeof saveData.version === 'number' ? saveData.version : 1
+        if (version > SAVE_VERSION) {
+          reject(new Error('El guardado es de una versión más reciente. Actualiza la aplicación.'))
+          return
+        }
+        resolve(migrateState(version, saveData.state))
       } catch {
         reject(new Error('Archivo JSON inválido'))
       }

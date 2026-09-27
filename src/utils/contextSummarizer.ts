@@ -27,8 +27,8 @@ export function isSummaryMessage(m: Message): boolean {
 
 export function getMessagesToSummarize(messages: Message[]): Message[] {
   const nonSummary = messages.filter((m) => !isSummaryMessage(m))
-  const toSummarize = nonSummary.slice(0, Math.min(SUMMARIZATION_BATCH, nonSummary.length - 10))
-  return toSummarize
+  const count = Math.max(0, Math.min(SUMMARIZATION_BATCH, nonSummary.length - 10))
+  return nonSummary.slice(0, count)
 }
 
 // Índice a partir del cual se conservan los mensajes al compactar (elimina el resumen previo si existe)
@@ -86,7 +86,7 @@ export async function summarizeMessages(
   })
 
   if (!response.ok) {
-    throw new Error(`Error de sumarización (${response.status}): ${await response.text().catch(() => '')}`)
+    throw new Error(`Error de sumarización (${response.status})`)
   }
 
   const data = await response.json()

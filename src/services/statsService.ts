@@ -1,3 +1,5 @@
+import { proxyAuthHeaders } from './proxyToken'
+
 export interface StatsPayload {
   username: string
   adventureName: string
@@ -16,9 +18,10 @@ export interface StatsPayload {
 }
 
 export async function upsertGameStats(payload: StatsPayload): Promise<void> {
-  await fetch('/api/stats', {
+  const res = await fetch('/api/stats', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...proxyAuthHeaders() },
     body: JSON.stringify(payload),
   })
+  if (!res.ok) throw new Error(`No se pudieron guardar las estadísticas (${res.status})`)
 }

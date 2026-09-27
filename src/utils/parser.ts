@@ -21,7 +21,8 @@ export function extractList(text: string, field: string): string[] {
     if (match) {
       return match[1]
         .split('\n')
-        .map((l) => l.replace(/^[-*]\s*/, '').trim())
+        .flatMap((l) => l.replace(/^[-*]\s*/, '').split(','))
+        .map((s) => s.trim())
         .filter(Boolean)
     }
   }

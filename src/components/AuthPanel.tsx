@@ -23,18 +23,22 @@ export default function AuthPanel({ requestConfirm }: Props) {
     setError('')
     setLoading(true)
 
-    const fn = mode === 'login' ? login : register
-    const result = await fn(username, password)
+    try {
+      const fn = mode === 'login' ? login : register
+      const result = await fn(username, password)
 
-    if (result.ok) {
-      dispatch({ type: 'SET_USER', username: getCurrentUser() })
-      setUsername('')
-      setPassword('')
-    } else {
-      setError(result.error || 'Error')
+      if (result.ok) {
+        dispatch({ type: 'SET_USER', username: getCurrentUser() })
+        setUsername('')
+        setPassword('')
+      } else {
+        setError(result.error || 'Error')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error inesperado')
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   function handleLogout() {

@@ -1,4 +1,4 @@
-import type { GameState, GameAction } from '../../types/game'
+import type { GameState, GameAction, WorldNPC } from '../../types/game'
 
 export function worldReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
@@ -34,16 +34,22 @@ export function worldReducer(state: GameState, action: GameAction): GameState {
       return state.worldState.npcs.find((n) => n.name === action.npc.name)
         ? state
         : { ...state, worldState: { ...state.worldState, npcs: [...state.worldState.npcs, action.npc] } }
-    case 'UPDATE_WORLD_NPC':
+    case 'UPDATE_WORLD_NPC': {
+      const clean: Partial<WorldNPC> = { ...action.updates }
+      for (const key of ['relationship', 'attitude'] as const) {
+        const v = clean[key]
+        if (typeof v === 'number' && !Number.isFinite(v)) clean[key] = 0
+      }
       return {
         ...state,
         worldState: {
           ...state.worldState,
           npcs: state.worldState.npcs.map((n) =>
-            n.name === action.name ? { ...n, ...action.updates } : n
+            n.name === action.name ? { ...n, ...clean } : n
           ),
         },
       }
+    }
     case 'REMOVE_WORLD_NPC':
       return { ...state, worldState: { ...state.worldState, npcs: state.worldState.npcs.filter((n) => n.name !== action.name) } }
     case 'MARK_LOCATION_IMAGE':

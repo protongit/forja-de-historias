@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo, useSyncExternalStore, useCallback } from 'react'
 import { useGame } from '../context/useGame'
-import { saveGame, loadGame, deleteSave, hasSave, exportGameToJSON, importGameFromJSON, listSaveSlots, subscribeSaveChanges, type SaveSlot } from '../services/storageService'
+import { saveGame, loadGame, deleteSave, exportGameToJSON, importGameFromJSON, listSaveSlots, subscribeSaveChanges, type SaveSlot } from '../services/storageService'
 import CollapsiblePanel from './CollapsiblePanel'
 
 export default function SaveLoadPanel({ requestConfirm }: { requestConfirm?: (title: string, message: string, onConfirm: () => void, variant?: 'danger' | 'warning' | 'default', confirmLabel?: string, cancelLabel?: string) => void }) {
@@ -18,7 +18,7 @@ export default function SaveLoadPanel({ requestConfirm }: { requestConfirm?: (ti
   const subscribe = useCallback((cb: () => void) => subscribeSaveChanges(cb), [])
   const getSnapshot = useCallback(() => JSON.stringify(listSaveSlots(username)), [username])
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
-  const slots = useMemo(() => JSON.parse(snapshot) as SaveSlot[], [snapshot])
+  const slots = useMemo(() => (JSON.parse(snapshot) as SaveSlot[]).slice().sort((a, b) => b.savedAt - a.savedAt), [snapshot])
 
   function performSave(name: string) {
     const trimmed = name.trim()
@@ -52,7 +52,7 @@ export default function SaveLoadPanel({ requestConfirm }: { requestConfirm?: (ti
   }
 
   function handleLoad() {
-    const name = selectedSlot || 'default'
+    const name = selectedSlot || slots[0]?.name || 'default'
     setLoading(true)
     const loaded = loadGame(username, name)
     if (loaded) {
@@ -66,7 +66,7 @@ export default function SaveLoadPanel({ requestConfirm }: { requestConfirm?: (ti
   }
 
   function handleDelete() {
-    const name = selectedSlot || 'default'
+    const name = selectedSlot || slots[0]?.name || 'default'
     if (!requestConfirm) return
     requestConfirm(
       'Eliminar partida',
@@ -188,7 +188,7 @@ export default function SaveLoadPanel({ requestConfirm }: { requestConfirm?: (ti
         </button>
         <button
           onClick={handleLoad}
-          disabled={loading || !hasSave(username)}
+          disabled={loading || slots.length === 0}
           className="px-2.5 py-1.5 bg-blue-700 hover:bg-blue-600 text-white text-xs rounded transition disabled:opacity-40 flex items-center gap-1"
           aria-label="Cargar partida"
         >
@@ -197,7 +197,7 @@ export default function SaveLoadPanel({ requestConfirm }: { requestConfirm?: (ti
         </button>
         <button
           onClick={handleDelete}
-          disabled={deleting || !hasSave(username)}
+          disabled={deleting || slots.length === 0}
           className="px-2.5 py-1.5 bg-red-700 hover:bg-red-600 text-white text-xs rounded transition disabled:opacity-40 flex items-center gap-1"
           aria-label="Eliminar partida"
         >

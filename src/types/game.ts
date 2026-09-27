@@ -271,7 +271,7 @@ export type GameAction =
   | { type: 'SET_TIME_OF_DAY'; time: WorldState['timeOfDay'] }
   | { type: 'SET_WEATHER'; weather: string | null }
   | { type: 'COMPACT_MESSAGES'; summaryMessage: Message }
-  | { type: 'INCREMENT_STAT'; stat: keyof GameStats }
+  | { type: 'INCREMENT_STAT'; stat: Exclude<keyof GameStats, 'adventureResult'> }
   | { type: 'UPDATE_STATS_BATCH'; stats: Partial<GameStats> }
   | { type: 'DELETE_MESSAGE'; id: string }
   | { type: 'UPDATE_MESSAGE_CONTENT'; id: string; content: string }
