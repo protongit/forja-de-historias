@@ -9,8 +9,17 @@ describe('cleanBracketCommands', () => {
 })
 
 describe('cleanContentMarkers', () => {
-  it('elimina marcadores de contenido', () => {
-    expect(cleanContentMarkers('[CHARACTER]texto[/CHARACTER]')).toBe('texto')
+  it('elimina bloques de datos estructurados con su contenido', () => {
+    expect(cleanContentMarkers('[CHARACTER]texto[/CHARACTER]')).toBe('')
+  })
+
+  it('conserva la narrativa y elimina los bloques [CHARACTER]/[QUEST]', () => {
+    const raw = 'Narrativa épica.\n[CHARACTER]\nNombre: Lyra\n[/CHARACTER]\n[QUEST]\nTítulo: X\n[/QUEST]\nMás narrativa.'
+    expect(cleanContentMarkers(raw)).toBe('Narrativa épica.\n\nMás narrativa.')
+  })
+
+  it('elimina marcadores sueltos sin bloque', () => {
+    expect(cleanContentMarkers('Hola [/STATS] mundo')).toBe('Hola  mundo')
   })
 })
 

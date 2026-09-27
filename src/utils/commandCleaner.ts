@@ -5,13 +5,19 @@ const BRACKET_GROUP = '(ADD_ITEM|REMOVE_ITEM|SETUP_COMPLETE|GENERATION_COMPLETE|
 
 const COMMAND_REGEX = new RegExp(`\\[{1,2}(${BRACKET_GROUP}(?:\\:\\s*[^\\]]*)?)\\]{1,2}`, 'gi')
 const CONTENT_MARKERS_REGEX = /\[\/?(CHARACTER|QUEST|STATS|SKILLS)\]/gi
+// Bloques de datos estructurados (se muestran en los paneles, no en la narrativa)
+const CONTENT_BLOCKS_REGEX = /\[(CHARACTER|QUEST|STATS|SKILLS)\][\s\S]*?\[\/\1\]/gi
 
 export function cleanBracketCommands(text: string): string {
   return text.replace(COMMAND_REGEX, '').trim()
 }
 
 export function cleanContentMarkers(text: string): string {
-  return text.replace(CONTENT_MARKERS_REGEX, '').trim()
+  return text
+    .replace(CONTENT_BLOCKS_REGEX, '')
+    .replace(CONTENT_MARKERS_REGEX, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
 
 let notifCounter = 0
