@@ -105,10 +105,21 @@ try {
 const app = express()
 app.use(express.json({ limit: '10mb' }))
 
-// Descomentar (o TRUST_PROXY=true) cuando el servidor corre detrás de un proxy inverso
-// para que rate limiting e IP de stats usen la IP real del cliente
-if (process.env.TRUST_PROXY === 'true') {
+// --- Proxy: necesario para que rate limiting e IP de stats usen la IP real ---
+// La mayoría de despliegues (Docker/nginx/plataformas cloud) están detrás de un
+// proxy inverso que añade X-Forwarded-For. Si no confiamos en él, express-rate-limit
+// lanza ERR_ERL_UNEXPECTED_X_FORWARDED_FOR y las rutas /api/* fallan (500).
+// Por defecto confiamos en 1 salto (el proxy inmediato). Usa TRUST_PROXY=false si el
+// servidor está expuesto directamente a Internet, o un número/preset ('loopback').
+const trustProxyEnv = process.env.TRUST_PROXY
+if (trustProxyEnv === 'false' || trustProxyEnv === '0') {
+  app.set('trust proxy', false)
+} else if (!trustProxyEnv || trustProxyEnv === 'true') {
   app.set('trust proxy', 1)
+} else if (/^\d+$/.test(trustProxyEnv)) {
+  app.set('trust proxy', parseInt(trustProxyEnv, 10))
+} else {
+  app.set('trust proxy', trustProxyEnv)
 }
 
 // --- Rate limiting (protege la API key del servidor contra abuso) ---
