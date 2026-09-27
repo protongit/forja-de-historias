@@ -12,21 +12,23 @@ export default function SaveLoadPanel({ requestConfirm }: { requestConfirm?: (ti
   const [loading, setLoading] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [showSaveForm, setShowSaveForm] = useState(false)
+  const [saveName, setSaveName] = useState('')
 
   const subscribe = useCallback((cb: () => void) => subscribeSaveChanges(cb), [])
   const getSnapshot = useCallback(() => JSON.stringify(listSaveSlots(username)), [username])
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
   const slots = useMemo(() => JSON.parse(snapshot) as SaveSlot[], [snapshot])
 
-  function handleSave() {
-    const name = selectedSlot || prompt('Nombre de la partida:') || state.adventureName || 'default'
-    if (!name) return
+  function performSave(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed) return
     setSaving(true)
     try {
-      saveGame(state, username, name)
+      saveGame(state, username, trimmed)
       dispatch({
         type: 'ADD_MESSAGE',
-        message: { id: crypto.randomUUID(), sender: 'system', content: `Partida "${name}" guardada correctamente.`, timestamp: Date.now() },
+        message: { id: crypto.randomUUID(), sender: 'system', content: `Partida "${trimmed}" guardada correctamente.`, timestamp: Date.now() },
       })
     } catch (err) {
       dispatch({
@@ -35,7 +37,18 @@ export default function SaveLoadPanel({ requestConfirm }: { requestConfirm?: (ti
       })
     } finally {
       setSaving(false)
+      setShowSaveForm(false)
+      setSaveName('')
     }
+  }
+
+  function handleSave() {
+    if (selectedSlot) {
+      performSave(selectedSlot)
+      return
+    }
+    setSaveName(state.adventureName || '')
+    setShowSaveForm(true)
   }
 
   function handleLoad() {
@@ -138,6 +151,29 @@ export default function SaveLoadPanel({ requestConfirm }: { requestConfirm?: (ti
             </button>
           ))}
         </div>
+      )}
+
+      {showSaveForm && (
+        <form
+          className="mb-2 flex gap-1.5"
+          onSubmit={(e) => { e.preventDefault(); performSave(saveName) }}
+        >
+          <input
+            type="text"
+            value={saveName}
+            onChange={(e) => setSaveName(e.target.value)}
+            placeholder="Nombre de la partida"
+            className="flex-1 min-w-0 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+            aria-label="Nombre de la partida"
+            autoFocus
+          />
+          <button type="submit" disabled={saving || !saveName.trim()} className="px-2.5 py-1.5 bg-green-700 hover:bg-green-600 text-white text-xs rounded transition disabled:opacity-50">
+            Guardar
+          </button>
+          <button type="button" onClick={() => setShowSaveForm(false)} className="px-2.5 py-1.5 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded transition">
+            Cancelar
+          </button>
+        </form>
       )}
 
       <div className="flex flex-wrap gap-1.5" role="toolbar" aria-label="Acciones de guardar y cargar">

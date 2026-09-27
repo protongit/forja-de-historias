@@ -10,10 +10,6 @@ export function combatReducer(state: GameState, action: GameAction): GameState {
       return { ...state, combatTurn: action.turn }
     case 'SET_ENEMIES':
       return { ...state, enemies: action.enemies }
-    case 'ADD_ENEMY':
-      return state.enemies.find((e) => e.name === action.enemy.name)
-        ? state
-        : { ...state, enemies: [...state.enemies, action.enemy] }
     case 'UPDATE_ENEMY': {
       return {
         ...state,
@@ -22,8 +18,6 @@ export function combatReducer(state: GameState, action: GameAction): GameState {
         ),
       }
     }
-    case 'REMOVE_ENEMY':
-      return { ...state, enemies: state.enemies.filter((e) => e.name !== action.name) }
     case 'ADD_XP':
       return {
         ...state,
@@ -38,8 +32,6 @@ export function combatReducer(state: GameState, action: GameAction): GameState {
             gameStats: { ...state.gameStats, levelsGained: state.gameStats.levelsGained + 1 },
           }
         : { ...state, level: action.level }
-    case 'SET_COMPANIONS':
-      return { ...state, companions: action.companions }
     case 'ADD_COMPANION':
       return state.companions.find((c) => c.name === action.companion.name)
         ? state

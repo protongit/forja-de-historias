@@ -1,7 +1,7 @@
 import { Readable } from 'stream'
 import { randomUUID } from 'crypto'
 import { readFileSync, existsSync, mkdirSync } from 'fs'
-import { resolve, dirname } from 'path'
+import { resolve, dirname, sep } from 'path'
 import { fileURLToPath } from 'url'
 import express from 'express'
 import rateLimit from 'express-rate-limit'
@@ -128,8 +128,18 @@ const statsLimiter = rateLimit({
   message: { error: 'Demasiadas solicitudes. Inténtalo de nuevo en un minuto.' },
 })
 
-// --- Auth opcional: si AUTH_TOKEN está definido, los proxies lo exigen ---
+// --- Auth: si AUTH_TOKEN está definido, los proxies lo exigen ---
+// REQUIRE_AUTH=true obliga a definir AUTH_TOKEN (falla el arranque si falta).
 const AUTH_TOKEN = process.env.AUTH_TOKEN || ''
+const REQUIRE_AUTH = process.env.REQUIRE_AUTH === 'true'
+
+if (REQUIRE_AUTH && !AUTH_TOKEN) {
+  console.error('[seguridad] REQUIRE_AUTH=true pero AUTH_TOKEN no está definido. Abortando.')
+  process.exit(1)
+}
+if (!AUTH_TOKEN) {
+  console.warn('[seguridad] AUTH_TOKEN no definido: /api/proxy/* está abierto y cualquiera puede consumir la API key del servidor. Define AUTH_TOKEN (y REQUIRE_AUTH=true) para protegerlo.')
+}
 
 function requireAuthToken(req, res, next) {
   if (!AUTH_TOKEN) return next()
@@ -140,7 +150,20 @@ function requireAuthToken(req, res, next) {
   next()
 }
 
-app.use(express.static(resolve(__dirname, 'dist'), { index: 'index.html' }))
+// --- Estáticos con cabeceras de caché correctas ---
+// index.html nunca se cachea; los assets con hash de /assets/ son inmutables.
+app.use(express.static(resolve(__dirname, 'dist'), {
+  index: 'index.html',
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-store')
+    } else if (filePath.includes(`${sep}assets${sep}`)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=3600')
+    }
+  },
+}))
 
 function stripKeys(config) {
   return {
@@ -327,7 +350,20 @@ app.get('/api/leaderboard', statsLimiter, (req, res) => {
   }
 })
 
-app.use((_req, res) => {
+// Fallback SPA: solo sirve index.html para rutas de navegación.
+// Los assets faltantes (o cualquier ruta con extensión) devuelven 404 real,
+// para no entregar HTML con 200 donde se espera JS/CSS (rompe imports dinámicos).
+app.use((req, res) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return res.status(405).json({ error: 'Método no permitido' })
+  }
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'Ruta no encontrada' })
+  }
+  if (req.path.startsWith('/assets/') || /\.[a-zA-Z0-9]+$/.test(req.path)) {
+    return res.status(404).type('text/plain').send('Not found')
+  }
+  res.setHeader('Cache-Control', 'no-store')
   res.sendFile(resolve(__dirname, 'dist', 'index.html'))
 })
 

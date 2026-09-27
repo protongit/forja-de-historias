@@ -16,7 +16,7 @@ export default function LogPanel() {
         </h3>
         <div className="space-y-2 max-h-60 overflow-y-auto">
           {reversed.length === 0 && (
-            <p className="text-gray-600 text-xs italic">Sin entradas aún</p>
+            <p className="text-gray-400 text-xs italic">Sin entradas aún</p>
           )}
           {reversed.map((entry, i) => (
             <details key={rawLog.length - 1 - i} className="bg-gray-800 rounded-lg p-2 text-xs">

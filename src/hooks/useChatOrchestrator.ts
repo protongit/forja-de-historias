@@ -29,6 +29,29 @@ function addLogEntry(playerMsg: string, raw: string, cleaned: string, phase: str
   dispatch({ type: 'ADD_LOG_ENTRY', entry })
 }
 
+// Copia de las porciones de estado que mutan las acciones de la IA, para poder
+// revertirlas al deshacer/regenerar (evita desincronización partida/save).
+function captureSnapshot(s: GameState): Partial<GameState> {
+  return {
+    character: s.character,
+    quest: s.quest,
+    inventory: s.inventory,
+    worldState: s.worldState,
+    combatActive: s.combatActive,
+    combatTurn: s.combatTurn,
+    enemies: s.enemies,
+    xp: s.xp,
+    level: s.level,
+    companions: s.companions,
+    journal: s.journal,
+    gameStats: s.gameStats,
+    notifications: s.notifications,
+    adventureName: s.adventureName,
+    pendingDiceCheck: s.pendingDiceCheck,
+    phase: s.phase,
+  }
+}
+
 function dispatchPhaseTransition(aiResponse: string, result: ProcessedResponse, dispatch: Dispatch<GameAction>, placeholderId: string | null): { transition: string; messageId: string | null } {
   const putGmMessage = (content: string): string => {
     if (placeholderId) {
@@ -60,9 +83,13 @@ function dispatchPhaseTransition(aiResponse: string, result: ProcessedResponse, 
       message: { id: crypto.randomUUID(), sender: 'system', content: '🏆 ¡Aventura completada! Gracias por jugar.', timestamp: Date.now() },
     })
     dispatch({ type: 'SET_PHASE', phase: 'completed' })
-    const finalText = result.cleaned
-    const isSuccess = finalText.includes('éxito') || finalText.includes('victoria') || !finalText.includes('fracaso')
-    dispatch({ type: 'SET_ADVENTURE_RESULT', result: isSuccess ? 'success' : 'failure' })
+    // Resultado explícito vía [[QUEST_COMPLETE: exito|fracaso]]; si no, heurística de texto
+    const explicitResult = result.actions.find((a) => a.type === 'SET_ADVENTURE_RESULT')
+    if (!explicitResult) {
+      const finalText = result.cleaned
+      const isSuccess = finalText.includes('éxito') || finalText.includes('victoria') || !finalText.includes('fracaso')
+      dispatch({ type: 'SET_ADVENTURE_RESULT', result: isSuccess ? 'success' : 'failure' })
+    }
     return { transition: 'quest-complete', messageId: id }
   }
   const id = putGmMessage(cleanContentMarkers(result.cleaned))
@@ -88,6 +115,10 @@ async function handlePendingImages(result: ProcessedResponse, imageConfig: GameS
 
   for (const { prompt, mark } of jobs) {
     try {
+      dispatch({
+        type: 'ADD_NOTIFICATION',
+        notification: { id: crypto.randomUUID(), type: 'system', message: '🎨 Generando imagen...', timestamp: Date.now() },
+      })
       const url = await generateImage(imageConfig, prompt)
       if (url) {
         dispatch({
@@ -152,6 +183,7 @@ function parseCharacterAndQuest(text: string, dispatch: Dispatch<GameAction>) {
 export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }: UseChatOrchestratorOptions = {}) {
   const { state, dispatch } = useGame()
   const abortRef = useRef<AbortController | null>(null)
+  const undoSnapshotRef = useRef<Partial<GameState> | null>(null)
 
   async function sendMessage(text?: string, attachmentsIn?: AttachmentInput[]) {
     const content = text ?? ''
@@ -218,6 +250,7 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
 
       addLogEntry(content, aiResponse, result.cleaned, currentPhase, dispatch)
 
+      undoSnapshotRef.current = captureSnapshot(state)
       for (const action of result.actions) {
         dispatch(action)
       }
@@ -297,6 +330,65 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
     }
   }
 
+  // Continuación de una tirada de dados: usa el MISMO pipeline que sendMessage
+  // (processRawResponse + buildCharContext) para no perder comandos del GM.
+  async function continueAfterDice(diceResult: string) {
+    const currentPhase = state.phase
+    const placeholderId = crypto.randomUUID()
+    dispatch({ type: 'SET_WAITING_AI', waiting: true })
+    dispatch({ type: 'SET_ERROR', error: null })
+    dispatch({ type: 'ADD_MESSAGE', message: { id: placeholderId, sender: 'gm', content: '', timestamp: Date.now() } })
+
+    const controller = new AbortController()
+    abortRef.current = controller
+    let lastFlush = 0
+
+    try {
+      const systemPrompt = buildSystemPrompt(currentPhase, state.tts.enabled, state.combatMode)
+      const charContext = buildCharContext(state)
+      const diceMsg: GameMessage = { id: crypto.randomUUID(), sender: 'system', content: diceResult, timestamp: Date.now() }
+      const allMessages: GameMessage[] = [...state.messages, diceMsg]
+
+      const aiResponse = await sendChatStream(state.aiConfig, systemPrompt, allMessages, charContext, {
+        signal: controller.signal,
+        onDelta: (accumulated) => {
+          const now = Date.now()
+          if (now - lastFlush < 80) return
+          lastFlush = now
+          dispatch({ type: 'UPDATE_MESSAGE_CONTENT', id: placeholderId, content: sanitizeStreamingText(accumulated) })
+        },
+      })
+
+      const result = processRawResponse(aiResponse, state.level)
+      addLogEntry('(tirada de dados)', aiResponse, result.cleaned, currentPhase, dispatch)
+
+      undoSnapshotRef.current = captureSnapshot(state)
+      for (const action of result.actions) {
+        dispatch(action)
+      }
+
+      const { transition, messageId } = dispatchPhaseTransition(aiResponse, result, dispatch, placeholderId)
+      if (messageId) {
+        await handlePendingImages(result, state.imageConfig, messageId, dispatch, transition, result.cleaned, state)
+      }
+    } catch (err) {
+      if (controller.signal.aborted) {
+        dispatch({ type: 'DELETE_MESSAGE', id: placeholderId })
+        dispatch({
+          type: 'ADD_MESSAGE',
+          message: { id: crypto.randomUUID(), sender: 'system', content: '⏹ Generación detenida por el jugador.', timestamp: Date.now() },
+        })
+        return
+      }
+      const errorMsg = err instanceof Error ? err.message : 'Error al comunicarse con la IA'
+      dispatch({ type: 'DELETE_MESSAGE', id: placeholderId })
+      dispatch({ type: 'SET_ERROR', error: errorMsg })
+    } finally {
+      abortRef.current = null
+      dispatch({ type: 'SET_WAITING_AI', waiting: false })
+    }
+  }
+
   function undoLastMessage() {
     if (state.isWaitingAI) return
     const playerMsgs = state.messages.filter((m) => m.sender === 'player')
@@ -313,6 +405,12 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
 
     for (const msg of [...afterAi, aiMsg]) {
       dispatch({ type: 'DELETE_MESSAGE', id: msg.id })
+    }
+
+    // Revierte las acciones de juego aplicadas por el turno deshecho
+    if (undoSnapshotRef.current) {
+      dispatch({ type: 'RESTORE_STATE', snapshot: undoSnapshotRef.current })
+      undoSnapshotRef.current = null
     }
 
     dispatch({ type: 'SET_WAITING_AI', waiting: true })
@@ -414,5 +512,5 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
     abortRef.current?.abort()
   }
 
-  return { sendMessage, undoLastMessage, cancelGeneration }
+  return { sendMessage, undoLastMessage, cancelGeneration, continueAfterDice }
 }

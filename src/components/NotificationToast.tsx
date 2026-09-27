@@ -19,12 +19,14 @@ const EXIT_MS = 300
 
 function Toast({ notification, dispatch }: { notification: GameNotification; dispatch: Dispatch<GameAction> }) {
   const [exiting, setExiting] = useState(false)
+  const [paused, setPaused] = useState(false)
   const { id, message, type } = notification
 
   useEffect(() => {
+    if (paused || exiting) return
     const timer = setTimeout(() => setExiting(true), DISMISS_AFTER_MS)
     return () => clearTimeout(timer)
-  }, [])
+  }, [paused, exiting])
 
   useEffect(() => {
     if (!exiting) return
@@ -32,15 +34,25 @@ function Toast({ notification, dispatch }: { notification: GameNotification; dis
     return () => clearTimeout(timer)
   }, [exiting, id, dispatch])
 
+  const dismiss = () => dispatch({ type: 'DISMISS_NOTIFICATION', id })
   const config = NOTIFICATION_CONFIG[type as keyof typeof NOTIFICATION_CONFIG] || NOTIFICATION_CONFIG.system
   return (
     <div
       className={`${config.bg} ${config.border} border text-white px-4 py-2.5 rounded-lg shadow-xl text-sm font-medium flex items-center gap-2 pointer-events-auto ${
         exiting ? 'animate-[fadeOut_0.3s_ease-in_forwards]' : 'animate-[slideIn_0.3s_ease-out]'
       }`}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
     >
-      <span className="text-base shrink-0">{config.icon}</span>
+      <span className="text-base shrink-0" aria-hidden="true">{config.icon}</span>
       <span className="truncate">{message}</span>
+      <button
+        onClick={dismiss}
+        className="shrink-0 ml-1 text-white/70 hover:text-white transition"
+        aria-label="Cerrar notificación"
+      >
+        ✕
+      </button>
     </div>
   )
 }

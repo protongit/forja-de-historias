@@ -13,17 +13,40 @@ interface ConfirmDialogProps {
 
 export default function ConfirmDialog({ open, title, message, confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', variant = 'default', onConfirm, onCancel }: ConfirmDialogProps) {
   const confirmRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const previouslyFocused = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
-    if (open) {
-      confirmRef.current?.focus()
+    if (!open) return
+    previouslyFocused.current = document.activeElement as HTMLElement
+    confirmRef.current?.focus()
+    return () => {
+      previouslyFocused.current?.focus?.()
     }
   }, [open])
 
   useEffect(() => {
     if (!open) return
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onCancel()
+      if (e.key === 'Escape') {
+        onCancel()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const focusables = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+      if (!focusables || focusables.length === 0) return
+      const list = Array.from(focusables)
+      const first = list[0]
+      const last = list[list.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
@@ -40,6 +63,7 @@ export default function ConfirmDialog({ open, title, message, confirmLabel = 'Co
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-[fadeIn_0.15s_ease-out]">
       <div
+        ref={dialogRef}
         className="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl max-w-sm w-full p-5 animate-[scaleIn_0.2s_ease-out]"
         role="alertdialog"
         aria-modal="true"

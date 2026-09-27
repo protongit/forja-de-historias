@@ -187,7 +187,7 @@ export default function ChatInterface({ quickSetupAnswers, onQuickSetupConsumed 
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto p-4 space-y-1" ref={scrollContainerRef} onScroll={handleScroll}>
+      <div className="flex-1 overflow-y-auto p-4 space-y-1" ref={scrollContainerRef} onScroll={handleScroll} role="log" aria-live="polite" aria-label="Transcripción de la aventura">
         {phaseToast && <PhaseToast key={state.phase} message={phaseToast} />}
         {state.messages.map((msg) => (
           <div key={msg.id}>

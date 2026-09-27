@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useGame } from '../context/useGame'
-import { sendChat } from '../services/aiService'
-import { cleanContentMarkers } from '../utils/commandCleaner'
-import { getGamemasterPrompt } from '../utils/prompts'
+import { useChatOrchestrator } from '../hooks/useChatOrchestrator'
 import type { DiceCheck } from '../types/game'
 
 const DICE_COLORS: Record<string, string> = {
@@ -24,6 +22,7 @@ export default function DiceRollOverlay() {
 
 function DiceRoll({ check }: { check: DiceCheck }) {
   const { state, dispatch } = useGame()
+  const { continueAfterDice } = useChatOrchestrator()
   const charStats = useMemo(() => state.character?.stats ?? [], [state.character])
   const charSkills = useMemo(() => state.character?.skills ?? [], [state.character])
   const maxFaces = useMemo(() => parseInt(check.dice.replace('d', ''), 10) || 20, [check.dice])
@@ -63,29 +62,15 @@ function DiceRoll({ check }: { check: DiceCheck }) {
 
     dispatch({ type: 'SET_DICE_CHECK', check: null })
     dispatch({ type: 'ADD_MESSAGE', message: { id: crypto.randomUUID(), sender: 'system', content: resultMsg, timestamp: Date.now() } })
-    dispatch({ type: 'SET_WAITING_AI', waiting: true })
 
     const diceResultMsg = `[[DICE_RESULT: stat: ${selected}, valor: ${statValue(selected)}, bonus: ${bonus}, resultado: ${result}, total: ${sum}, dc: ${check.dc}, ${success ? 'exito' : 'fracaso'}]]`
-    const systemMessage = { id: crypto.randomUUID(), sender: 'system' as const, content: diceResultMsg, timestamp: Date.now() }
-    const aiMessages = [...state.messages, systemMessage]
 
-    const gmPrompt = getGamemasterPrompt(state.combatMode === 'tactical')
-    const charCtx = state.character?.stats.length || state.character?.skills.length
-      ? `\n\nCONTEXTO DEL PERSONAJE:\nNombre: ${state.character?.name}\nEstadísticas: ${(state.character?.stats || []).map((s) => `${s.name}: ${s.value}`).join(', ')}\nHabilidades: ${(state.character?.skills || []).map((s) => `${s.name}: ${s.description}`).join(', ')}`
-      : ''
-    const fullPrompt = gmPrompt + charCtx
-
-    sendChat(state.aiConfig, fullPrompt, aiMessages)
-      .then((aiResponse) => {
-        dispatch({ type: 'ADD_MESSAGE', message: { id: crypto.randomUUID(), sender: 'gm', content: cleanContentMarkers(aiResponse), timestamp: Date.now() } })
-      })
-      .catch((err) => dispatch({ type: 'SET_ERROR', error: err.message }))
-      .finally(() => dispatch({ type: 'SET_WAITING_AI', waiting: false }))
+    void continueAfterDice(diceResultMsg)
 
     function statValue(name: string): number {
       return charStats.find((s) => s.name === name)?.value ?? 0
     }
-  }, [result, success, selected, statBonus, check.dc, state.messages, state.aiConfig, state.combatMode, state.character, dispatch, charStats])
+  }, [result, success, selected, statBonus, check.dc, charStats, dispatch, continueAfterDice])
 
   const continueRef = useRef(handleContinue)
   useEffect(() => {

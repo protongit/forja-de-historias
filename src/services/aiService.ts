@@ -29,8 +29,11 @@ export function buildApiMessages(systemPrompt: string, messages: Message[], char
     }
     // Plain string when the message is text-only (required by some OpenAI-compatible servers)
     const hasImage = parts.some((p) => p.type === 'image_url')
+    // Los mensajes internos (sender 'system': resultados de dados, avisos, resúmenes)
+    // se envían como 'user' para que el modelo los trate como contexto de entrada,
+    // no como turnos previos del asistente.
     apiMessages.push({
-      role: (m.sender === 'player' ? 'user' : 'assistant') as 'user' | 'assistant',
+      role: (m.sender === 'gm' ? 'assistant' : 'user') as 'user' | 'assistant',
       content: hasImage ? parts : m.content,
     })
   }
@@ -55,6 +58,19 @@ async function fetchApi(config: AIConfig, body: Record<string, unknown>, signal?
   })
 }
 
+// Extrae el texto de una respuesta no-stream, validando la estructura.
+function extractContent(data: unknown): string {
+  const content = (data as { choices?: { message?: { content?: unknown } }[] })?.choices?.[0]?.message?.content
+  if (typeof content !== 'string' || content.length === 0) {
+    throw new Error('La IA devolvió una respuesta vacía o con formato inválido')
+  }
+  return content
+}
+
+function apiError(status: number): Error {
+  return new Error(`Error del proveedor de IA (${status})`)
+}
+
 export async function sendChat(
   config: AIConfig,
   systemPrompt: string,
@@ -67,9 +83,8 @@ export async function sendChat(
   }
 
   const response = await fetchApi(config, body)
-  if (!response.ok) throw new Error(`Error API (${response.status}): ${await response.text().catch(() => '') || response.statusText}`)
-  const data = await response.json()
-  return data.choices[0].message.content
+  if (!response.ok) throw apiError(response.status)
+  return extractContent(await response.json())
 }
 
 export interface ChatStreamOptions {
@@ -95,12 +110,11 @@ export async function sendChatStream(
   }
 
   const response = await fetchApi(config, body, signal)
-  if (!response.ok) throw new Error(`Error API (${response.status}): ${await response.text().catch(() => '') || response.statusText}`)
+  if (!response.ok) throw apiError(response.status)
 
   const reader = response.body?.getReader()
   if (!reader) {
-    const data = await response.json()
-    return data.choices[0].message.content
+    return extractContent(await response.json())
   }
 
   const decoder = new TextDecoder()

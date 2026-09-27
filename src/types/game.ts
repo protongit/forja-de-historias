@@ -239,26 +239,22 @@ export type GameAction =
   | { type: 'SET_USER'; username: string | null }
   | { type: 'SET_CONFIGS_RESTORED'; restored: boolean }
   | { type: 'LOAD_STATE'; state: GameState }
+  | { type: 'RESTORE_STATE'; snapshot: Partial<GameState> }
   | { type: 'RESET' }
   | { type: 'ADD_ITEM'; item: string }
   | { type: 'REMOVE_ITEM'; item: string }
-  | { type: 'SET_INVENTORY'; inventory: string[] }
   | { type: 'SET_NOTES'; notes: string }
   | { type: 'ADD_LOG_ENTRY'; entry: RawLogEntry }
   | { type: 'TOGGLE_LOG' }
   | { type: 'SET_DICE_CHECK'; check: DiceCheck | null }
-  | { type: 'SET_DICE_RESULT'; result: number; success: boolean }
   | { type: 'SET_DICE_AUTO_ROLL'; autoRoll: boolean }
   | { type: 'SET_COMBAT_MODE'; mode: CombatMode }
   | { type: 'SET_COMBAT_ACTIVE'; active: boolean }
   | { type: 'SET_COMBAT_TURN'; turn: number }
   | { type: 'SET_ENEMIES'; enemies: Enemy[] }
-  | { type: 'ADD_ENEMY'; enemy: Enemy }
   | { type: 'UPDATE_ENEMY'; name: string; updates: Partial<Enemy> }
-  | { type: 'REMOVE_ENEMY'; name: string }
   | { type: 'ADD_XP'; amount: number }
   | { type: 'SET_LEVEL'; level: number }
-  | { type: 'SET_COMPANIONS'; companions: Companion[] }
   | { type: 'ADD_COMPANION'; companion: Companion }
   | { type: 'REMOVE_COMPANION'; name: string }
   | { type: 'SET_COMPANION_ACTIVE'; name: string; active: boolean }

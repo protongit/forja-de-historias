@@ -101,8 +101,9 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
           <h3 className="text-md font-semibold text-indigo-400 mb-3">🤖 Modelo de IA</h3>
           <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Endpoint</label>
+              <label htmlFor="ai-endpoint" className="block text-sm font-medium text-gray-300 mb-1">Endpoint</label>
               <input
+                id="ai-endpoint"
                 type="text"
                 value={config.endpoint}
                 onChange={(e) => updateConfig({ endpoint: e.target.value })}
@@ -111,8 +112,9 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">API Key</label>
+              <label htmlFor="ai-apikey" className="block text-sm font-medium text-gray-300 mb-1">API Key</label>
               <input
+                id="ai-apikey"
                 type="password"
                 value={config.apiKey}
                 onChange={(e) => updateConfig({ apiKey: e.target.value })}
@@ -122,10 +124,11 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
             </div>
             {!config.apiKey && (
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
+                <label htmlFor="ai-proxytoken" className="block text-sm font-medium text-gray-300 mb-1">
                   Token de acceso al servidor <span className="text-gray-500 font-normal">(si el servidor lo requiere)</span>
                 </label>
                 <input
+                  id="ai-proxytoken"
                   type="password"
                   value={proxyToken}
                   onChange={(e) => {
@@ -138,8 +141,9 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Modelo</label>
+              <label htmlFor="ai-model" className="block text-sm font-medium text-gray-300 mb-1">Modelo</label>
               <input
+                id="ai-model"
                 type="text"
                 value={config.model}
                 onChange={(e) => updateConfig({ model: e.target.value })}
@@ -148,10 +152,11 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label htmlFor="ai-temperature" className="block text-sm font-medium text-gray-300 mb-1">
                 Temperatura: {config.temperature}
               </label>
               <input
+                id="ai-temperature"
                 type="range"
                 min="0"
                 max="2"
@@ -169,7 +174,7 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
               >
                 {testing ? 'Probando...' : 'Probar conexión'}
               </button>
-              <button onClick={handleLoadSample} className="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition text-sm">🔄</button>
+              <button onClick={handleLoadSample} className="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition text-sm" aria-label="Cargar configuración de ejemplo" title="Cargar configuración de ejemplo">🔄</button>
             </div>
             {testResult === 'success' && <p className="text-green-400 text-sm">Conexión exitosa</p>}
             {testResult === 'error' && <p className="text-red-400 text-sm">Error de conexión</p>}
@@ -220,8 +225,9 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
 
                 {tts.mode === 'browser' ? (
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">Voz del navegador</label>
+                    <label htmlFor="tts-voice-browser" className="block text-sm font-medium text-gray-300 mb-1">Voz del navegador</label>
                     <select
+                      id="tts-voice-browser"
                       value={tts.voice}
                       onChange={(e) => updateTTS({ voice: e.target.value })}
                       className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 outline-none text-sm"
@@ -249,8 +255,9 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
                 ) : (
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">Endpoint</label>
+                      <label htmlFor="tts-endpoint" className="block text-sm font-medium text-gray-300 mb-1">Endpoint</label>
                       <input
+                        id="tts-endpoint"
                         type="text"
                         value={tts.endpoint}
                         onChange={(e) => updateTTS({ endpoint: e.target.value })}
@@ -259,8 +266,9 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">API Key</label>
+                      <label htmlFor="tts-apikey" className="block text-sm font-medium text-gray-300 mb-1">API Key</label>
                       <input
+                        id="tts-apikey"
                         type="password"
                         value={tts.apiKey}
                         onChange={(e) => updateTTS({ apiKey: e.target.value })}
@@ -269,8 +277,9 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">Modelo</label>
+                      <label htmlFor="tts-model" className="block text-sm font-medium text-gray-300 mb-1">Modelo</label>
                       <input
+                        id="tts-model"
                         type="text"
                         value={tts.model}
                         onChange={(e) => updateTTS({ model: e.target.value })}
@@ -279,8 +288,9 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">Voz</label>
+                      <label htmlFor="tts-voice-external" className="block text-sm font-medium text-gray-300 mb-1">Voz</label>
                       <input
+                        id="tts-voice-external"
                         type="text"
                         value={tts.voice}
                         onChange={(e) => updateTTS({ voice: e.target.value })}
@@ -292,10 +302,11 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                  <label htmlFor="tts-rate" className="block text-sm font-medium text-gray-300 mb-1">
                     Velocidad: {tts.rate.toFixed(1)}
                   </label>
                   <input
+                    id="tts-rate"
                     type="range"
                     min="0.5"
                     max="2"
@@ -307,10 +318,11 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                  <label htmlFor="tts-pitch" className="block text-sm font-medium text-gray-300 mb-1">
                     Tono: {tts.pitch.toFixed(1)}
                   </label>
                   <input
+                    id="tts-pitch"
                     type="range"
                     min="0.5"
                     max="2"
@@ -341,7 +353,7 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
                       </button>
                     ))}
                   </div>
-                  <p className="text-[10px] text-gray-600 mt-1">Al cambiar la emoción se ajustan velocidad y tono automáticamente</p>
+                  <p className="text-[10px] text-gray-400 mt-1">Al cambiar la emoción se ajustan velocidad y tono automáticamente</p>
                 </div>
               </>
             )}
@@ -353,16 +365,18 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
           <div className="space-y-3">
             <div className="flex items-center gap-2 mb-2">
               <input
+                id="image-enable"
                 type="checkbox"
                 checked={imageConfig.enabled}
                 onChange={(e) => updateImageConfig({ enabled: e.target.checked })}
                 className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-purple-600 focus:ring-purple-500"
               />
-              <label className="text-sm text-gray-300">Habilitar generación de imágenes</label>
+              <label htmlFor="image-enable" className="text-sm text-gray-300">Habilitar generación de imágenes</label>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Endpoint</label>
+              <label htmlFor="image-endpoint" className="block text-sm font-medium text-gray-300 mb-1">Endpoint</label>
               <input
+                id="image-endpoint"
                 type="text"
                 value={imageConfig.endpoint}
                 onChange={(e) => updateImageConfig({ endpoint: e.target.value })}
@@ -371,8 +385,9 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">API Key</label>
+              <label htmlFor="image-apikey" className="block text-sm font-medium text-gray-300 mb-1">API Key</label>
               <input
+                id="image-apikey"
                 type="password"
                 value={imageConfig.apiKey}
                 onChange={(e) => updateImageConfig({ apiKey: e.target.value })}
@@ -381,8 +396,9 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Modelo</label>
+              <label htmlFor="image-model" className="block text-sm font-medium text-gray-300 mb-1">Modelo</label>
               <input
+                id="image-model"
                 type="text"
                 value={imageConfig.model}
                 onChange={(e) => updateImageConfig({ model: e.target.value })}
@@ -391,8 +407,9 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Tamaño</label>
+              <label htmlFor="image-size" className="block text-sm font-medium text-gray-300 mb-1">Tamaño</label>
               <select
+                id="image-size"
                 value={imageConfig.size}
                 onChange={(e) => updateImageConfig({ size: e.target.value })}
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-purple-500 outline-none text-sm"
@@ -407,8 +424,9 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
 
         <div className="border-t border-gray-700 pt-4">
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-300">Partida efímera</label>
+            <label htmlFor="ephemeral-mode" className="text-sm font-medium text-gray-300">Partida efímera</label>
             <input
+              id="ephemeral-mode"
               type="checkbox"
               checked={state.isEphemeral}
               onChange={() => dispatch({ type: 'SET_EPHEMERAL', ephemeral: !state.isEphemeral })}
@@ -425,7 +443,7 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
           onClick={handleStart}
           className="w-full mt-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg transition"
         >
-          {onClose ? 'Guardar cambios' : 'Comenzar aventura'}
+          {onClose ? 'Listo' : 'Comenzar aventura'}
         </button>
       </div>
     </div>

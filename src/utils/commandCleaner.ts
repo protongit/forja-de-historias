@@ -61,6 +61,17 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
     })
   }
 
+  // --- QUEST_COMPLETE (resultado explícito opcional: exito | fracaso) ---
+  const questCompleteRegex = /\[{1,2}QUEST_COMPLETE(?::\s*(exito|éxito|success|fracaso|failure))?\]{1,2}/i
+  const questComplete = cleaned.match(questCompleteRegex)
+  if (questComplete) {
+    const outcome = (questComplete[1] || '').trim().toLowerCase()
+    if (outcome) {
+      const failure = outcome.startsWith('fracaso') || outcome.startsWith('failure')
+      actions.push({ type: 'SET_ADVENTURE_RESULT', result: failure ? 'failure' : 'success' })
+    }
+  }
+
   // --- COMBAT_START ---
   const combatStartRegex = /\[{1,2}COMBAT_START:\s*enemigos:\s*(.+?)\]{1,2}/i
   const combatStartMatch = cleaned.match(combatStartRegex)
@@ -80,18 +91,19 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
   }
 
   // --- ENEMY_DAMAGE / ENEMY_HEAL (name captured greedily: it may contain commas) ---
-  const enemyDamageRegex = /\[{1,2}ENEMY_DAMAGE:\s*(.+),\s*(\d+)\]{1,2}/i
-  const enemyDmg = cleaned.match(enemyDamageRegex)
-  if (enemyDmg) actions.push({ type: 'UPDATE_ENEMY', name: enemyDmg[1].trim(), updates: { hp: Math.max(0, parseInt(enemyDmg[2])) } })
+  const enemyDamageRegex = /\[{1,2}ENEMY_DAMAGE:\s*(.+),\s*(\d+)\]{1,2}/gi
+  for (const enemyDmg of cleaned.matchAll(enemyDamageRegex)) {
+    actions.push({ type: 'UPDATE_ENEMY', name: enemyDmg[1].trim(), updates: { hp: Math.max(0, parseInt(enemyDmg[2])) } })
+  }
 
-  const enemyHealRegex = /\[{1,2}ENEMY_HEAL:\s*(.+),\s*(\d+)\]{1,2}/i
-  const enemyHeal = cleaned.match(enemyHealRegex)
-  if (enemyHeal) actions.push({ type: 'UPDATE_ENEMY', name: enemyHeal[1].trim(), updates: { hp: Math.min(999, parseInt(enemyHeal[2])) } })
+  const enemyHealRegex = /\[{1,2}ENEMY_HEAL:\s*(.+),\s*(\d+)\]{1,2}/gi
+  for (const enemyHeal of cleaned.matchAll(enemyHealRegex)) {
+    actions.push({ type: 'UPDATE_ENEMY', name: enemyHeal[1].trim(), updates: { hp: Math.min(999, parseInt(enemyHeal[2])) } })
+  }
 
   // --- ADD_XP / LEVEL_UP ---
-  const xpRegex = /\[{1,2}ADD_XP:\s*(\d+)\]{1,2}/i
-  const xpMatch = cleaned.match(xpRegex)
-  if (xpMatch) {
+  const xpRegex = /\[{1,2}ADD_XP:\s*(\d+)\]{1,2}/gi
+  for (const xpMatch of cleaned.matchAll(xpRegex)) {
     const amount = parseInt(xpMatch[1], 10)
     actions.push({ type: 'ADD_XP', amount })
     actions.push({
@@ -105,9 +117,10 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
     })
   }
 
-  const levelUpRegex = /\[{1,2}LEVEL_UP\]{1,2}/i
-  if (levelUpRegex.test(cleaned)) {
-    const newLevel = Math.min(100, currentLevel + 1)
+  const levelUpRegex = /\[{1,2}LEVEL_UP\]{1,2}/gi
+  const levelUps = cleaned.match(levelUpRegex)?.length ?? 0
+  if (levelUps > 0) {
+    const newLevel = Math.min(100, currentLevel + levelUps)
     actions.push({ type: 'SET_LEVEL', level: newLevel })
     actions.push({
       type: 'ADD_NOTIFICATION',
@@ -136,9 +149,8 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
   }
 
   // --- Companion commands (description may contain commas → greedy until ", stats:") ---
-  const addCompanionRegex = /\[{1,2}ADD_COMPANION:\s*(.+?),\s*(.+),\s*stats:\s*(.+?)\]{1,2}/i
-  const addComp = cleaned.match(addCompanionRegex)
-  if (addComp) {
+  const addCompanionRegex = /\[{1,2}ADD_COMPANION:\s*(.+?),\s*(.+),\s*stats:\s*(.+?)\]{1,2}/gi
+  for (const addComp of cleaned.matchAll(addCompanionRegex)) {
     const stats = addComp[3].trim().split(',').map((s) => {
       const p = s.split(':').map((x) => x.trim())
       return { name: p[0], value: parseInt(p[1]) || 1 }
@@ -149,40 +161,43 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
     })
   }
 
-  const removeComp = /\[{1,2}REMOVE_COMPANION:\s*(.+?)\]{1,2}/i
-  const rmComp = cleaned.match(removeComp)
-  if (rmComp) actions.push({ type: 'REMOVE_COMPANION', name: rmComp[1].trim() })
-
-  // --- Journal commands (summary may contain commas → greedy before the event type) ---
-  const JOURNAL_EVENT_TYPES = 'discovery|encounter|dialog|achievement|milestone'
-  const journalEntryRegex = new RegExp(`\\[{1,2}JOURNAL_ENTRY:\\s*(.+?),\\s*(.+),\\s*(${JOURNAL_EVENT_TYPES})\\]{1,2}`, 'i')
-  let je = cleaned.match(journalEntryRegex)
-  let jeType: JournalEventType = (je?.[3].trim() as JournalEventType) || 'discovery'
-  if (!je) {
-    // Fallback: unknown/missing event type — don't lose the entry
-    const genericRegex = /\[{1,2}JOURNAL_ENTRY:\s*(.+?),\s*(.+?)\]{1,2}/i
-    je = cleaned.match(genericRegex)
-    jeType = 'discovery'
+  const removeCompRegex = /\[{1,2}REMOVE_COMPANION:\s*(.+?)\]{1,2}/gi
+  for (const rmComp of cleaned.matchAll(removeCompRegex)) {
+    actions.push({ type: 'REMOVE_COMPANION', name: rmComp[1].trim() })
   }
-  if (je) {
+
+  // --- Journal commands (summary may contain commas; optional type at the end) ---
+  const JOURNAL_EVENT_TYPES = 'discovery|encounter|dialog|achievement|milestone'
+  const journalEntryRegex = /\[{1,2}JOURNAL_ENTRY:\s*([\s\S]+?)\]{1,2}/gi
+  for (const jeMatch of cleaned.matchAll(journalEntryRegex)) {
+    let body = jeMatch[1].trim()
+    let eventType: JournalEventType = 'discovery'
+    const typeMatch = body.match(new RegExp(`^([\\s\\S]+),\\s*(${JOURNAL_EVENT_TYPES})$`, 'i'))
+    if (typeMatch) {
+      eventType = typeMatch[2].trim().toLowerCase() as JournalEventType
+      body = typeMatch[1].trim()
+    }
+    const commaIdx = body.indexOf(',')
+    const title = commaIdx === -1 ? body : body.slice(0, commaIdx).trim()
+    const summary = commaIdx === -1 ? body : body.slice(commaIdx + 1).trim()
+    if (!title) continue
     actions.push({
       type: 'ADD_JOURNAL_ENTRY',
-      entry: { id: `j-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, title: je[1].trim(), summary: je[2].trim(), timestamp: Date.now(), eventType: jeType, isFavorite: false },
+      entry: { id: `j-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, title, summary, timestamp: Date.now(), eventType, isFavorite: false },
     })
     actions.push({
       type: 'ADD_NOTIFICATION',
       notification: {
         id: notifId(),
         type: 'quest',
-        message: `📖 Diario: ${je[1].trim()}`,
+        message: `📖 Diario: ${title}`,
         timestamp: Date.now(),
       },
     })
   }
 
-  const discoverRegex = /\[{1,2}DISCOVER:\s*(.+?)\]{1,2}/i
-  const disc = cleaned.match(discoverRegex)
-  if (disc) {
+  const discoverRegex = /\[{1,2}DISCOVER:\s*(.+?)\]{1,2}/gi
+  for (const disc of cleaned.matchAll(discoverRegex)) {
     actions.push({
       type: 'ADD_JOURNAL_ENTRY',
       entry: { id: `j-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, title: `Descubrimiento: ${disc[1].trim()}`, summary: `Has descubierto ${disc[1].trim()}`, timestamp: Date.now(), eventType: 'discovery', isFavorite: false },
@@ -190,31 +205,32 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
   }
 
   // --- OBJECTIVE commands ---
-  const objectiveCompleteRegex = /\[{1,2}OBJECTIVE_COMPLETE:\s*(.+?)\]{1,2}/i
-  const oc = cleaned.match(objectiveCompleteRegex)
-  if (oc) actions.push({ type: 'COMPLETE_OBJECTIVE', name: oc[1].trim() })
+  const objectiveCompleteRegex = /\[{1,2}OBJECTIVE_COMPLETE:\s*(.+?)\]{1,2}/gi
+  for (const oc of cleaned.matchAll(objectiveCompleteRegex)) {
+    actions.push({ type: 'COMPLETE_OBJECTIVE', name: oc[1].trim() })
+  }
 
-  const addObjectiveRegex = /\[{1,2}ADD_OBJECTIVE:\s*(.+?)\]{1,2}/i
-  const ao = cleaned.match(addObjectiveRegex)
-  if (ao) actions.push({ type: 'ADD_OBJECTIVE', objective: { name: ao[1].trim(), completed: false } })
+  const addObjectiveRegex = /\[{1,2}ADD_OBJECTIVE:\s*(.+?)\]{1,2}/gi
+  for (const ao of cleaned.matchAll(addObjectiveRegex)) {
+    actions.push({ type: 'ADD_OBJECTIVE', objective: { name: ao[1].trim(), completed: false } })
+  }
 
   // --- WORLD commands (descriptions may contain commas → greedy tail fields) ---
-  const setLocationRegex = /\[{1,2}SET_LOCATION:\s*(.+?)\]{1,2}/i
-  const sl = cleaned.match(setLocationRegex)
-  if (sl) actions.push({ type: 'SET_CURRENT_LOCATION', name: sl[1].trim() })
+  const setLocationRegex = /\[{1,2}SET_LOCATION:\s*(.+?)\]{1,2}/gi
+  for (const sl of cleaned.matchAll(setLocationRegex)) {
+    actions.push({ type: 'SET_CURRENT_LOCATION', name: sl[1].trim() })
+  }
 
-  const discoverLocationRegex = /\[{1,2}DISCOVER_LOCATION:\s*(.+?),\s*(.+?)\]{1,2}/i
-  const dl = cleaned.match(discoverLocationRegex)
-  if (dl) {
+  const discoverLocationRegex = /\[{1,2}DISCOVER_LOCATION:\s*(.+?),\s*(.+?)\]{1,2}/gi
+  for (const dl of cleaned.matchAll(discoverLocationRegex)) {
     actions.push({
       type: 'ADD_LOCATION',
       location: { name: dl[1].trim(), description: dl[2].trim(), discovered: true, exits: [] },
     })
   }
 
-  const addNpcRegex = /\[{1,2}ADD_NPC:\s*(.+?),\s*(.+),\s*([^,]+?),\s*(-?\d+)\]{1,2}/i
-  const an = cleaned.match(addNpcRegex)
-  if (an) {
+  const addNpcRegex = /\[{1,2}ADD_NPC:\s*(.+?),\s*(.+),\s*([^,]+?),\s*(-?\d+)\]{1,2}/gi
+  for (const an of cleaned.matchAll(addNpcRegex)) {
     actions.push({
       type: 'ADD_WORLD_NPC',
       npc: {
@@ -229,9 +245,8 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
   }
 
   // value (last field) captured greedily so it may contain commas
-  const updateNpcRegex = /\[{1,2}UPDATE_NPC:\s*(.+?),\s*([^,]+?),\s*(.+?)\]{1,2}/i
-  const un = cleaned.match(updateNpcRegex)
-  if (un) {
+  const updateNpcRegex = /\[{1,2}UPDATE_NPC:\s*(.+?),\s*([^,]+?),\s*(.+?)\]{1,2}/gi
+  for (const un of cleaned.matchAll(updateNpcRegex)) {
     const field = un[2].trim()
     const value = un[3].trim()
     let updates: Record<string, unknown>
@@ -241,35 +256,34 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
     actions.push({ type: 'UPDATE_WORLD_NPC', name: un[1].trim(), updates: updates as Partial<import('../types/game').WorldNPC> })
   }
 
-  const removeNpcRegex = /\[{1,2}REMOVE_NPC:\s*(.+?)\]{1,2}/i
-  const rn = cleaned.match(removeNpcRegex)
-  if (rn) actions.push({ type: 'REMOVE_WORLD_NPC', name: rn[1].trim() })
+  const removeNpcRegex = /\[{1,2}REMOVE_NPC:\s*(.+?)\]{1,2}/gi
+  for (const rn of cleaned.matchAll(removeNpcRegex)) {
+    actions.push({ type: 'REMOVE_WORLD_NPC', name: rn[1].trim() })
+  }
 
-  const setTimeRegex = /\[{1,2}SET_TIME:\s*(.+?)\]{1,2}/i
-  const st = cleaned.match(setTimeRegex)
-  if (st) {
+  const setTimeRegex = /\[{1,2}SET_TIME:\s*(.+?)\]{1,2}/gi
+  for (const st of cleaned.matchAll(setTimeRegex)) {
     const valid = ['amanecer', 'mañana', 'tarde', 'atardecer', 'noche']
     const t = st[1].trim().toLowerCase()
     if (valid.includes(t)) actions.push({ type: 'SET_TIME_OF_DAY', time: t as import('../types/game').WorldState['timeOfDay'] })
   }
 
-  const setWeatherRegex = /\[{1,2}SET_WEATHER:\s*(.+?)\]{1,2}/i
-  const sw = cleaned.match(setWeatherRegex)
-  if (sw) actions.push({ type: 'SET_WEATHER', weather: sw[1].trim() })
+  const setWeatherRegex = /\[{1,2}SET_WEATHER:\s*(.+?)\]{1,2}/gi
+  for (const sw of cleaned.matchAll(setWeatherRegex)) {
+    actions.push({ type: 'SET_WEATHER', weather: sw[1].trim() })
+  }
 
-  // --- TONE command ---
-  const toneRegex = /\[{1,2}TONE:\s*(.+?)\]{1,2}/i
-  const tone = cleaned.match(toneRegex)
-  if (tone) {
+  // --- TONE command (el último tono válido gana) ---
+  const toneRegex = /\[{1,2}TONE:\s*(.+?)\]{1,2}/gi
+  for (const tone of cleaned.matchAll(toneRegex)) {
     const em = tone[1].trim().toLowerCase()
     const valid = ['neutral', 'grave', 'alegre', 'epico', 'misterioso', 'susurro', 'terrorifico']
     if (valid.includes(em)) actions.push({ type: 'TTS_SET_EMOTION', emotion: em as TTSVoiceEmotion })
   }
 
   // --- Player HP commands ---
-  const playerDamageRegex = /\[{1,2}PLAYER_DAMAGE:\s*(\d+)\]{1,2}/i
-  const playerDmg = cleaned.match(playerDamageRegex)
-  if (playerDmg) {
+  const playerDamageRegex = /\[{1,2}PLAYER_DAMAGE:\s*(\d+)\]{1,2}/gi
+  for (const playerDmg of cleaned.matchAll(playerDamageRegex)) {
     const dmg = parseInt(playerDmg[1], 10)
     actions.push({ type: 'UPDATE_PLAYER_HP', delta: -dmg })
     actions.push({
@@ -283,9 +297,8 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
     })
   }
 
-  const playerHealRegex = /\[{1,2}PLAYER_HEAL:\s*(\d+)\]{1,2}/i
-  const playerHeal = cleaned.match(playerHealRegex)
-  if (playerHeal) {
+  const playerHealRegex = /\[{1,2}PLAYER_HEAL:\s*(\d+)\]{1,2}/gi
+  for (const playerHeal of cleaned.matchAll(playerHealRegex)) {
     const heal = parseInt(playerHeal[1], 10)
     actions.push({ type: 'UPDATE_PLAYER_HP', delta: heal })
     actions.push({
@@ -299,9 +312,8 @@ export function processRawResponse(raw: string, currentLevel: number): Processed
     })
   }
 
-  const setPlayerHpRegex = /\[{1,2}SET_PLAYER_HP:\s*(\d+)\s*,\s*(\d+)\]{1,2}/i
-  const setHp = cleaned.match(setPlayerHpRegex)
-  if (setHp) {
+  const setPlayerHpRegex = /\[{1,2}SET_PLAYER_HP:\s*(\d+)\s*,\s*(\d+)\]{1,2}/gi
+  for (const setHp of cleaned.matchAll(setPlayerHpRegex)) {
     actions.push({ type: 'SET_PLAYER_HP', hp: parseInt(setHp[1], 10), maxHp: parseInt(setHp[2], 10) })
   }
 
@@ -348,7 +360,12 @@ export function parseSkills(text: string): CharacterSkill[] {
 export function sanitizeStreamingText(raw: string): string {
   let t = raw.replace(/([[［]{1,2})\s*\$\s*/g, '$1')
   t = t.replace(/[[［]{1,2}[A-Z_][A-Z0-9_ ]*(?:[：:][\s\S]*?)?[\]］]{1,2}/gi, '')
-  const openIdx = t.search(/[[［][^a-z0-9]/)
-  if (openIdx !== -1) t = t.slice(0, openIdx)
+  // Opciones {{...}}: quita las completas y corta en la incompleta en curso,
+  // para no mostrar llaves crudas durante el streaming.
+  t = t.replace(/\{\{[\s\S]*?\}\}/g, '')
+  const blockIdx = t.search(/[[［][^a-z0-9]/)
+  if (blockIdx !== -1) t = t.slice(0, blockIdx)
+  const optIdx = t.search(/\{\{/)
+  if (optIdx !== -1) t = t.slice(0, optIdx)
   return t.replace(/\s+$/, '')
 }

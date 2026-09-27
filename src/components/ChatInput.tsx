@@ -36,7 +36,10 @@ export default forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ qui
       name: a.file.name,
     }))
     if (!content && pending.length === 0) return
-    if (input) input.value = ''
+    if (input) {
+      input.value = ''
+      input.style.height = 'auto'
+    }
     setAttachments([])
     void sendToAI(content, pending.length > 0 ? pending : undefined)
   }
@@ -97,7 +100,7 @@ export default forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ qui
             <div key={i} className="flex items-center gap-1.5 bg-gray-700 border border-gray-500 text-gray-200 text-xs px-2.5 py-1 rounded-full">
               <span className="text-indigo-400">📎</span>
               <span className="truncate max-w-[140px]">{att.file.name}</span>
-              <button onClick={() => removeAttachment(i)} className="ml-0.5 text-gray-500 hover:text-red-400 transition">✕</button>
+              <button onClick={() => removeAttachment(i)} className="ml-0.5 text-gray-500 hover:text-red-400 transition" aria-label={`Quitar archivo ${att.file.name}`}>✕</button>
             </div>
           ))}
         </div>
@@ -114,10 +117,16 @@ export default forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ qui
         <textarea
           ref={inputRef}
           onKeyDown={handleKeyDown}
+          onInput={(e) => {
+            const el = e.currentTarget
+            el.style.height = 'auto'
+            el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+          }}
           placeholder="Escribe tu acción..."
           className="flex-1 px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none"
           rows={1}
           disabled={state.isWaitingAI}
+          aria-label="Escribe tu acción"
         />
         <div className="flex flex-col gap-1.5">
           {state.isWaitingAI ? (
@@ -156,12 +165,13 @@ export default forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ qui
                   : 'bg-gray-700 border border-gray-500 text-gray-300 hover:bg-gray-600 hover:text-white hover:border-gray-400'
               }`}
               title={recording ? 'Detener grabación' : 'Grabar audio'}
+              aria-label={recording ? 'Detener grabación' : 'Grabar audio'}
             >
               {recording ? '⏹' : '🎤'}
             </button>
-            <label className="w-9 h-9 flex items-center justify-center rounded-lg transition cursor-pointer bg-gray-700 border border-gray-500 text-gray-300 hover:bg-gray-600 hover:text-white hover:border-gray-400">
+            <label className="w-9 h-9 flex items-center justify-center rounded-lg transition cursor-pointer bg-gray-700 border border-gray-500 text-gray-300 hover:bg-gray-600 hover:text-white hover:border-gray-400" title="Adjuntar archivo">
               📎
-              <input type="file" multiple accept="image/*,.pdf,.txt,.md" onChange={handleFileAttach} className="hidden" />
+              <input type="file" multiple accept="image/*,.pdf,.txt,.md" onChange={handleFileAttach} className="hidden" aria-label="Adjuntar archivo" />
             </label>
           </div>
         </div>

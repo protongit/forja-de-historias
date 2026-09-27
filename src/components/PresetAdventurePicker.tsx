@@ -301,8 +301,9 @@ export default function PresetAdventurePicker({ onBack, onStartCustom, onStart, 
           </div>
 
           <div>
-            <label className="text-xs text-gray-400 block mb-1">Nombre del personaje</label>
+            <label htmlFor="quick-char-name" className="text-xs text-gray-400 block mb-1">Nombre del personaje</label>
             <input
+              id="quick-char-name"
               type="text"
               value={quickName}
               onChange={(e) => setQuickName(e.target.value)}

@@ -40,10 +40,6 @@ function buildSetupPrompt(ttsEnabled: boolean): string {
       '6. **Modo de combate**: ¿Cómo quieres que sean los combates? {{Táctico: con turnos y opciones de acción}} {{Narrativo: el GM narra libremente}}',
       '6. **Modo de combate**: ¿Cómo quieres que sean los combates? {{Táctico: con turnos y opciones de ataque/defensa/habilidad/huir}} {{Narrativo: el GM narra libremente}}'
     )
-    .replace(
-      '(la emoción seleccionada afectará a los parámetros de voz)',
-      ''
-    )
 }
 
 const GM_INVENTORY = `GESTIÓN DE INVENTARIO:
@@ -132,7 +128,7 @@ const GM_HP = `GESTIÓN DE HP DEL JUGADOR:
 const GM_FINAL = `DETECCIÓN DE FINAL:
 - Evalúa constantemente si el jugador ha cumplido el objetivo principal de su misión.
 - También considera si el jugador podría haber fracasado de forma definitiva (muerte, misión imposible).
-- SI el jugador ha cumplido el objetivo principal (éxito) O ha fracasado de forma irreversible (fracaso), responde ÚNICAMENTE con "[[QUEST_COMPLETE]]" seguido de una narración épica del final: describe las consecuencias de sus acciones, el destino del mundo/personajes, y cierra la historia de forma satisfactoria.
+- SI el jugador ha cumplido el objetivo principal (éxito) O ha fracasado de forma irreversible (fracaso), responde con el comando explícito "[[QUEST_COMPLETE: exito]]" o "[[QUEST_COMPLETE: fracaso]]" según corresponda, seguido de una narración épica del final: describe las consecuencias de sus acciones, el destino del mundo/personajes, y cierra la historia de forma satisfactoria.
 
 IMPORTANTE: No fuerces el final. Solo termina cuando el objetivo esté claramente cumplido o sea imposible de cumplir.
 

@@ -41,7 +41,7 @@ export default function LeaderboardPage({ onBack }: Props) {
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold flex items-center gap-3">
-            <span>🏆</span> Leaderboard
+            <span>🏆</span> Clasificación
           </h1>
           <button onClick={onBack} className="text-sm text-indigo-400 hover:text-indigo-300 transition">
             ← Volver al juego
@@ -51,12 +51,12 @@ export default function LeaderboardPage({ onBack }: Props) {
         {loading ? (
           <div className="text-center text-gray-500 py-12 animate-pulse">Cargando clasificación...</div>
         ) : sorted.length === 0 ? (
-          <div className="text-center text-gray-600 py-12">
+          <div className="text-center text-gray-400 py-12">
             <p className="text-4xl mb-4">🏆</p>
             <p>Aún no hay datos. ¡Sé el primero en aparecer!</p>
           </div>
         ) : (
-          <div className="bg-gray-800 rounded-xl overflow-hidden shadow-lg">
+          <div className="bg-gray-800 rounded-xl overflow-hidden shadow-lg overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-750 border-b border-gray-700">

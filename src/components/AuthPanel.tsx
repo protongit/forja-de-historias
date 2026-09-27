@@ -123,8 +123,9 @@ export default function AuthPanel({ requestConfirm }: Props) {
           className="space-y-3"
         >
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">Nombre</label>
+            <label htmlFor="auth-guest-name" className="block text-xs font-medium text-gray-400 mb-1">Nombre</label>
             <input
+              id="auth-guest-name"
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
@@ -167,8 +168,9 @@ export default function AuthPanel({ requestConfirm }: Props) {
         <>
           <form onSubmit={handleSubmit} className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">Usuario</label>
+              <label htmlFor="auth-user" className="block text-xs font-medium text-gray-400 mb-1">Usuario</label>
               <input
+                id="auth-user"
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -179,8 +181,9 @@ export default function AuthPanel({ requestConfirm }: Props) {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">Clave</label>
+              <label htmlFor="auth-password" className="block text-xs font-medium text-gray-400 mb-1">Clave</label>
               <input
+                id="auth-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

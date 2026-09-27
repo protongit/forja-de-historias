@@ -38,8 +38,6 @@ export function coreReducer(state: GameState, action: GameAction): GameState {
         : { ...state, inventory: [...state.inventory, action.item] }
     case 'REMOVE_ITEM':
       return { ...state, inventory: state.inventory.filter((i) => i !== action.item) }
-    case 'SET_INVENTORY':
-      return { ...state, inventory: action.inventory }
     case 'SET_NOTES':
       return { ...state, notes: action.notes }
     case 'ADD_LOG_ENTRY':
@@ -56,6 +54,8 @@ export function coreReducer(state: GameState, action: GameAction): GameState {
       }
       return loaded
     }
+    case 'RESTORE_STATE':
+      return { ...state, ...action.snapshot }
     case 'RESET':
       return { ...initialState, currentUser: state.currentUser }
     case 'DELETE_MESSAGE':
@@ -81,18 +81,6 @@ export function coreReducer(state: GameState, action: GameAction): GameState {
       return { ...state, currentSaveSlot: action.slot }
     case 'SET_DICE_CHECK':
       return { ...state, pendingDiceCheck: action.check }
-    case 'SET_DICE_RESULT':
-      return state.pendingDiceCheck
-        ? {
-            ...state,
-            pendingDiceCheck: {
-              ...state.pendingDiceCheck,
-              result: action.result,
-              success: action.success,
-              resolved: true,
-            },
-          }
-        : state
     case 'SET_DICE_AUTO_ROLL':
       return { ...state, diceAutoRoll: action.autoRoll }
     case 'TTS_SET_EMOTION':

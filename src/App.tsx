@@ -11,6 +11,7 @@ import JournalPanel from './components/JournalPanel'
 import GameStatsPanel from './components/GameStatsPanel'
 import LogPanel from './components/LogPanel'
 import NotificationToast from './components/NotificationToast'
+import ErrorBanner from './components/ErrorBanner'
 import ConfirmDialog from './components/ConfirmDialog'
 import { version } from './version'
 
@@ -108,6 +109,20 @@ export default function App() {
     )
   }
 
+  useEffect(() => {
+    if (!settingsOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSettingsOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [settingsOpen])
+
+  useEffect(() => {
+    if (!userMenuOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setUserMenuOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [userMenuOpen])
+
   const isGamePhase = state.phase === 'setup' || state.phase === 'generation' || state.phase === 'playing' || state.phase === 'completed'
 
   const hasNotifications = state.notifications.length > 0
@@ -124,7 +139,7 @@ export default function App() {
     return (
       <div className="h-screen bg-gray-900 text-white flex flex-col">
         <header className="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-center shrink-0">
-          <h1 className="text-xl font-bold text-indigo-400">📖 Forja de Historias <span className="text-[10px] text-gray-600 ml-1">v{version}</span></h1>
+          <h1 className="text-xl font-bold text-indigo-400">📖 Forja de Historias <span className="text-[10px] text-gray-400 ml-1">v{version}</span></h1>
         </header>
         <div className="flex-1 flex items-center justify-center p-4">
           <AuthPanel requestConfirm={requestConfirm} />
@@ -137,7 +152,7 @@ export default function App() {
     <div className="h-screen bg-gray-900 text-white flex flex-col">
       <header className="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between shrink-0" role="banner">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold text-indigo-400">📖 Forja de Historias <span className="text-[10px] text-gray-600 ml-1">v{version}</span></h1>
+          <h1 className="text-xl font-bold text-indigo-400">📖 Forja de Historias <span className="text-[10px] text-gray-400 ml-1">v{version}</span></h1>
           {isGamePhase && (
             <span className="px-2 py-0.5 bg-indigo-900/50 text-indigo-300 text-xs rounded-full hidden sm:inline">
               {getPhaseLabel(state.phase)}
@@ -211,16 +226,14 @@ export default function App() {
                 />
                 🎲 Auto
               </label>
-              {!state.currentUser.startsWith('invitado_') && (
-                <button
-                  onClick={() => setSettingsOpen(true)}
-                  className="px-1.5 sm:px-2.5 py-1 rounded text-xs font-medium bg-gray-700 text-gray-400 hover:text-gray-200 transition"
-                  title="Configuración"
-                  aria-label="Abrir configuración"
-                >
-                  ⚙️
-                </button>
-              )}
+              <button
+                onClick={() => setSettingsOpen(true)}
+                className="px-1.5 sm:px-2.5 py-1 rounded text-xs font-medium bg-gray-700 text-gray-400 hover:text-gray-200 transition"
+                title="Configuración"
+                aria-label="Abrir configuración"
+              >
+                ⚙️
+              </button>
             </>
           )}
           <div className="relative">
@@ -244,16 +257,14 @@ export default function App() {
             {userMenuOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 z-50 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1" role="menu" aria-label="Menú de opciones">
-                  {!state.currentUser.startsWith('invitado_') && (
-                    <button
-                      onClick={() => { setSettingsOpen(true); setUserMenuOpen(false) }}
-                      className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition flex items-center gap-2"
-                      role="menuitem"
-                    >
-                      ⚙️ Configuración
-                    </button>
-                  )}
+                <div className="absolute right-0 top-full mt-1 z-50 w-56 bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1" role="menu" aria-label="Menú de opciones">
+                  <button
+                    onClick={() => { setSettingsOpen(true); setUserMenuOpen(false) }}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition flex items-center gap-2"
+                    role="menuitem"
+                  >
+                    ⚙️ Configuración
+                  </button>
                   <button
                     onClick={() => { dispatch({ type: 'TOGGLE_LOG' }); setUserMenuOpen(false) }}
                     className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition flex items-center gap-2"
@@ -261,6 +272,35 @@ export default function App() {
                   >
                     📋 {state.showLog ? 'Ocultar log' : 'Mostrar log'}
                   </button>
+                  <button
+                    onClick={() => dispatch({ type: 'SET_DICE_AUTO_ROLL', autoRoll: !state.diceAutoRoll })}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition flex items-center justify-between gap-2"
+                    role="menuitemcheckbox"
+                    aria-checked={state.diceAutoRoll}
+                  >
+                    <span>🎲 Tirada automática</span>
+                    <span className={state.diceAutoRoll ? 'text-green-400' : 'text-gray-500'}>{state.diceAutoRoll ? '✓' : '—'}</span>
+                  </button>
+                  {state.tts.enabled && (
+                    <>
+                      <button
+                        onClick={() => dispatch({ type: 'SET_TTS_CONFIG', config: { ...state.tts, autoPlay: !state.tts.autoPlay } })}
+                        className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition flex items-center justify-between gap-2"
+                        role="menuitemcheckbox"
+                        aria-checked={state.tts.autoPlay}
+                      >
+                        <span>{state.tts.autoPlay ? '🔊' : '🔇'} Auto-lectura</span>
+                        <span className={state.tts.autoPlay ? 'text-green-400' : 'text-gray-500'}>{state.tts.autoPlay ? '✓' : '—'}</span>
+                      </button>
+                      <button
+                        onClick={() => { stopSpeaking(); setUserMenuOpen(false) }}
+                        className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition flex items-center gap-2"
+                        role="menuitem"
+                      >
+                        ⏹ Detener narración
+                      </button>
+                    </>
+                  )}
                   <hr className="border-gray-700 my-1" />
                   <button
                     onClick={handleLogout}
@@ -360,6 +400,7 @@ export default function App() {
 
       <Suspense fallback={null}><DiceRollOverlay /></Suspense>
       <NotificationToast />
+      <ErrorBanner />
 
       <ConfirmDialog
         open={confirmAction !== null}
@@ -377,7 +418,7 @@ export default function App() {
 
       {/* Mobile bottom tab bar */}
       {isGamePhase && (
-        <nav className="md:hidden bg-gray-800 border-t border-gray-700 flex shrink-0" role="navigation" aria-label="Navegación móvil">
+        <nav className="lg:hidden bg-gray-800 border-t border-gray-700 flex shrink-0" role="navigation" aria-label="Navegación móvil">
           <button
             onClick={() => setMobileTab('chat')}
             className={`flex-1 py-2.5 text-center text-xs font-medium transition ${
@@ -425,8 +466,14 @@ export default function App() {
       )}
 
       {settingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="relative max-h-[90vh] overflow-y-auto rounded-xl">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Configuración"
+          onClick={() => setSettingsOpen(false)}
+        >
+          <div className="relative max-h-[90vh] overflow-y-auto rounded-xl" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setSettingsOpen(false)}
               className="absolute top-3 right-3 z-10 w-8 h-8 flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white rounded-full text-sm transition"
