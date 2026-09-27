@@ -42,8 +42,15 @@ jobs:
           base_version=$(git show "$BASE:package.json" | grep -m1 '"version"' | cut -d'"' -f4)
           cur_version=$(node -p "require('./package.json').version")
           changed=$(git diff --name-only "$BASE"...HEAD | grep -E '\.(ts|tsx|js|css)$' || true)
-          if [ -n "$changed" ] && [ "$base_version" = "$cur_version" ]; then
-            echo "::error::Hay archivos de código modificados pero la versión de package.json no se incrementó ($cur_version). Regla obligatoria (AGENTS.md)."
-            exit 1
+          if [ -n "$changed" ]; then
+            if [ "$base_version" = "$cur_version" ]; then
+              echo "::error::Hay archivos de código modificados pero la versión de package.json no se incrementó ($cur_version). Regla obligatoria (AGENTS.md)."
+              exit 1
+            fi
+            highest=$(printf '%s\n%s\n' "$base_version" "$cur_version" | sort -V | tail -1)
+            if [ "$highest" != "$cur_version" ]; then
+              echo "::error::La versión debe AUMENTAR: package.json pasó de $base_version a $cur_version."
+              exit 1
+            fi
           fi
           echo "Versión OK: $base_version -> $cur_version"

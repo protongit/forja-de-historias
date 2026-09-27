@@ -26,7 +26,13 @@ export default forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ qui
   const { sendMessage: sendToAI, undoLastMessage, cancelGeneration } = useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed })
   const [attachments, setAttachments] = useState<{ file: File; dataUrl: string }[]>([])
 
+  // Durante 'generation' el input debe permanecer montado (para que el orquestador
+  // reciba quickSetupAnswers) pero bloqueado, evitando envíos accidentales.
+  const isGenerating = state.phase === 'generation'
+  const busy = state.isWaitingAI || isGenerating
+
   function sendMessage(text?: string) {
+    if (busy) return
     const input = inputRef.current
     const content = text ?? input?.value.trim() ?? ''
     const pending: PendingAttachment[] = attachments.map((a) => ({
@@ -65,7 +71,7 @@ export default forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ qui
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      sendMessage()
+      if (!busy) sendMessage()
     }
   }
 
@@ -125,7 +131,7 @@ export default forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ qui
           placeholder="Escribe tu acción..."
           className="flex-1 px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none"
           rows={1}
-          disabled={state.isWaitingAI}
+          disabled={busy}
           aria-label="Escribe tu acción"
         />
         <div className="flex flex-col gap-1.5">
@@ -141,7 +147,8 @@ export default forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ qui
           ) : (
             <button
               onClick={() => sendMessage()}
-              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition"
+              disabled={isGenerating}
+              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition disabled:opacity-40"
             >
               Enviar
             </button>
@@ -149,7 +156,7 @@ export default forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ qui
           <div className="flex gap-1.5">
             <button
               onClick={() => undoLastMessage()}
-              disabled={state.isWaitingAI || state.messages.filter((m) => m.sender === 'player').length === 0}
+              disabled={busy || state.messages.filter((m) => m.sender === 'player').length === 0}
               className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-700 border border-gray-500 text-gray-300 hover:bg-gray-600 hover:text-white transition disabled:opacity-30"
               title="Deshacer último mensaje"
               aria-label="Deshacer último mensaje"
@@ -158,7 +165,7 @@ export default forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ qui
             </button>
             <button
               onClick={recording ? () => void stopRecording() : startRecording}
-              disabled={state.isWaitingAI}
+              disabled={busy}
               className={`w-9 h-9 flex items-center justify-center rounded-lg transition ${
                 recording
                   ? 'bg-red-600 text-white ring-2 ring-red-400'

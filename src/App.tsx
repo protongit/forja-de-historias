@@ -153,7 +153,7 @@ export default function App() {
       <header className="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between shrink-0" role="banner">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold text-indigo-400">📖 Forja de Historias <span className="text-[10px] text-gray-400 ml-1">v{version}</span></h1>
-          {isGamePhase && (
+          {isGamePhase && view === 'game' && (
             <span className="px-2 py-0.5 bg-indigo-900/50 text-indigo-300 text-xs rounded-full hidden sm:inline">
               {getPhaseLabel(state.phase)}
             </span>

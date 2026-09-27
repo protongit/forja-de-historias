@@ -108,14 +108,15 @@ export function buildCharContext(state: GameState): string {
   // --- INVENTORY ---
   if (inventory?.length) {
     parts.push('### INVENTARIO')
-    parts.push(inventory.join(', '))
+    const shown = inventory.slice(0, 40)
+    parts.push(shown.join(', ') + (inventory.length > shown.length ? ` … (+${inventory.length - shown.length} más)` : ''))
     parts.push('')
   }
 
   // --- JOURNAL ---
   if (journal?.length) {
     parts.push('### DIARIO DE AVENTURA')
-    for (const entry of journal) {
+    for (const entry of journal.slice(-15)) {
       const date = new Date(entry.timestamp).toLocaleDateString('es-ES')
       parts.push(`- [${date}] ${entry.title}: ${entry.summary} (${entry.eventType})`)
     }
@@ -129,7 +130,7 @@ export function buildCharContext(state: GameState): string {
   if (worldState.locations.length) {
     parts.push('')
     parts.push('#### Ubicaciones descubiertas')
-    for (const loc of worldState.locations) {
+    for (const loc of worldState.locations.slice(0, 20)) {
       const exits = loc.exits.length ? ` → ${loc.exits.join(', ')}` : ''
       parts.push(`- ${loc.name}: ${loc.description}${exits}`)
     }
@@ -137,7 +138,7 @@ export function buildCharContext(state: GameState): string {
   if (worldState.npcs.length) {
     parts.push('')
     parts.push('#### NPCs conocidos')
-    for (const npc of worldState.npcs) {
+    for (const npc of worldState.npcs.slice(0, 20)) {
       if (!npc.isAlive) continue
       const rel = npc.relationship >= 0 ? `+${npc.relationship}` : `${npc.relationship}`
       parts.push(`- ${npc.name} (${npc.location}): ${npc.description} — Relación: ${rel}`)

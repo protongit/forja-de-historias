@@ -13,6 +13,14 @@ describe('extractField', () => {
   it('devuelve null si no existe', () => {
     expect(extractField('sin campos', 'Nombre')).toBeNull()
   })
+
+  it('no captura el nombre del campo dentro de la prosa', () => {
+    expect(extractField('El anciano dijo que el Nombre: era secreto', 'Nombre')).toBeNull()
+  })
+
+  it('extrae un campo en una línea posterior', () => {
+    expect(extractField('Intro narrativa\nNombre: Lyra\nRasgos: audaz', 'Nombre')).toBe('Lyra')
+  })
 })
 
 describe('extractList', () => {

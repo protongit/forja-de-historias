@@ -195,7 +195,7 @@ export default function ChatInterface({ quickSetupAnswers, onQuickSetupConsumed 
               message={msg}
               isLoading={msg === lastMsg && lastIsGmSlot && msg.content === ''}
               onSelectOption={
-                state.phase !== 'completed' && msg.sender === 'gm'
+                state.phase !== 'completed' && !state.isWaitingAI && msg.sender === 'gm'
                   ? (opt) => chatInputRef.current?.sendMessage(opt)
                   : undefined
               }
@@ -216,7 +216,7 @@ export default function ChatInterface({ quickSetupAnswers, onQuickSetupConsumed 
         <div ref={bottomRef} />
       </div>
 
-      {state.phase !== 'completed' && state.phase !== 'generation' && (
+      {state.phase !== 'completed' && (
         <div className="p-3 border-t border-gray-700">
           <ChatInput ref={chatInputRef} quickSetupAnswers={quickSetupAnswers} onQuickSetupConsumed={onQuickSetupConsumed} />
         </div>

@@ -1,8 +1,9 @@
 export function extractField(text: string, field: string): string | null {
+  // Anclado a inicio de línea para no capturar el nombre del campo dentro de la prosa
   const patterns = [
-    new RegExp(`\\*\\*${field}:?\\*\\*\\s*([^\\n]+)`, 'i'),
-    new RegExp(`\\*${field}:?\\*\\s*([^\\n]+)`, 'i'),
-    new RegExp(`${field}:?\\s*([^\\n]+)`, 'i'),
+    new RegExp(`(?:^|\\n)\\s*\\*\\*${field}:?\\*\\*\\s*([^\\n]+)`, 'i'),
+    new RegExp(`(?:^|\\n)\\s*\\*${field}:?\\*\\s*([^\\n]+)`, 'i'),
+    new RegExp(`(?:^|\\n)\\s*${field}:?\\s*([^\\n]+)`, 'i'),
   ]
   for (const pattern of patterns) {
     const match = text.match(pattern)
@@ -13,8 +14,8 @@ export function extractField(text: string, field: string): string | null {
 
 export function extractList(text: string, field: string): string[] {
   const patterns = [
-    new RegExp(`\\*\\*${field}:?\\*\\*([\\s\\S]*?)(?=\\n\\*\\*|$)`, 'i'),
-    new RegExp(`${field}:?([\\s\\S]*?)(?=\\n\\w+:|$)`, 'i'),
+    new RegExp(`(?:^|\\n)\\s*\\*\\*${field}:?\\*\\*([\\s\\S]*?)(?=\\n\\*\\*|$)`, 'i'),
+    new RegExp(`(?:^|\\n)\\s*${field}:?([\\s\\S]*?)(?=\\n\\w+:|$)`, 'i'),
   ]
   for (const pattern of patterns) {
     const match = text.match(pattern)

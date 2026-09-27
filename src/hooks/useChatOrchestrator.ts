@@ -458,8 +458,38 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
 
   async function generateAdventure(setupAnswersOverride?: Record<string, string>) {
     dispatch({ type: 'SET_WAITING_AI', waiting: true })
+    dispatch({ type: 'SET_ERROR', error: null })
+    const controller = new AbortController()
+    abortRef.current = controller
+
+    // En "configuración rápida" no hay conversación previa: las respuestas del
+    // jugador se inyectan como mensaje para que el GM las use al generar.
+    let apiMessages = state.messages
+    if (setupAnswersOverride) {
+      const answersText = Object.entries(setupAnswersOverride).map(([k, v]) => `- ${k}: ${v}`).join('\n')
+      apiMessages = [
+        ...state.messages,
+        { id: 'quick-setup-answers', sender: 'player', content: `Quiero crear una aventura con estas preferencias:\n${answersText}`, timestamp: Date.now() },
+      ]
+    }
+
     try {
-      const aiResponse = await sendChatStream(state.aiConfig, buildSystemPrompt('generation', state.tts.enabled, state.combatMode), state.messages)
+      const aiResponse = await sendChatStream(
+        state.aiConfig,
+        buildSystemPrompt('generation', state.tts.enabled, state.combatMode),
+        apiMessages,
+        undefined,
+        { signal: controller.signal }
+      )
+
+      if (controller.signal.aborted) {
+        dispatch({
+          type: 'ADD_MESSAGE',
+          message: { id: crypto.randomUUID(), sender: 'system', content: '⏹ Generación detenida por el jugador.', timestamp: Date.now() },
+        })
+        return
+      }
+
       const result = processRawResponse(aiResponse, state.level)
 
       addLogEntry('(generación automática)', aiResponse, result.cleaned, 'generation', dispatch)
@@ -487,14 +517,21 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
 
       await handlePendingImages(result, state.imageConfig, msgId, dispatch, 'generation-complete', result.cleaned, state)
     } catch (err) {
+      if (controller.signal.aborted) {
+        dispatch({
+          type: 'ADD_MESSAGE',
+          message: { id: crypto.randomUUID(), sender: 'system', content: '⏹ Generación detenida por el jugador.', timestamp: Date.now() },
+        })
+        return
+      }
       const errorMsg = err instanceof Error ? err.message : 'Error al generar la aventura'
       dispatch({ type: 'SET_ERROR', error: errorMsg })
       dispatch({
         type: 'ADD_MESSAGE',
         message: { id: crypto.randomUUID(), sender: 'system', content: `Error: ${errorMsg}`, timestamp: Date.now() },
       })
-      throw err
     } finally {
+      abortRef.current = null
       dispatch({ type: 'SET_WAITING_AI', waiting: false })
     }
   }
@@ -503,6 +540,11 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
   useEffect(() => {
     if (!quickSetupAnswers || state.phase !== 'generation' || state.isWaitingAI) return
     dispatch({ type: 'SET_SETUP_ANSWERS', answers: quickSetupAnswers })
+    const answersText = Object.entries(quickSetupAnswers).map(([k, v]) => `- ${k}: ${v}`).join('\n')
+    dispatch({
+      type: 'ADD_MESSAGE',
+      message: { id: crypto.randomUUID(), sender: 'player', content: `Quiero crear una aventura con estas preferencias:\n${answersText}`, timestamp: Date.now() },
+    })
     onQuickSetupConsumed?.()
     generateAdventure(quickSetupAnswers)
     // eslint-disable-next-line react-hooks/exhaustive-deps

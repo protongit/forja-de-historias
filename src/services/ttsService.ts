@@ -3,6 +3,9 @@ import { proxyAuthHeaders } from './proxyToken'
 
 let audioEl: HTMLAudioElement | null = null
 let currentBlobUrl: string | null = null
+// Token de generación: descarta respuestas de reproducciones ya reemplazadas.
+let ttsToken = 0
+let currentController: AbortController | null = null
 
 export function getVoices(): SpeechSynthesisVoice[] {
   return window.speechSynthesis.getVoices()
@@ -29,68 +32,39 @@ export function speakBrowser(text: string, config: TTSConfig): void {
   window.speechSynthesis.speak(utterance)
 }
 
-async function fetchAndPlay(body: Record<string, unknown>, config: TTSConfig): Promise<void> {
-  stopSpeaking()
-
-  let url: string | undefined
-  try {
-    const res = await fetch('/api/proxy/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...proxyAuthHeaders() },
-      body: JSON.stringify(body),
-    })
-
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => '')
-      throw new Error(`TTS error (${res.status}): ${errBody || res.statusText}`)
-    }
-
-    const blob = await res.blob()
-    url = URL.createObjectURL(blob)
-    currentBlobUrl = url
-    audioEl = new Audio(url)
-    audioEl.playbackRate = Math.max(0.1, Math.min(10, config.rate))
-    await audioEl.play()
-  } catch (err) {
-    if (url && currentBlobUrl === url) {
-      URL.revokeObjectURL(url)
-      currentBlobUrl = null
-    }
-    throw err
+async function playResponse(res: Response, config: TTSConfig, token: number): Promise<void> {
+  if (!res.ok) {
+    throw new Error(`TTS error (${res.status})`)
   }
+  const blob = await res.blob()
+  // Otra reproducción empezó (o se detuvo) mientras descargábamos: descartar.
+  if (token !== ttsToken) return
+  const url = URL.createObjectURL(blob)
+  currentBlobUrl = url
+  audioEl = new Audio(url)
+  audioEl.playbackRate = Math.max(0.1, Math.min(10, config.rate))
+  await audioEl.play()
 }
 
-async function fetchAndPlayDirect(body: Record<string, unknown>, config: TTSConfig): Promise<void> {
+async function fetchAndPlayExternal(url: string, headers: Record<string, string>, body: Record<string, unknown>, config: TTSConfig): Promise<void> {
   stopSpeaking()
 
-  let url: string | undefined
+  const token = ++ttsToken
+  const controller = new AbortController()
+  currentController = controller
   try {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    headers['Authorization'] = `Bearer ${config.apiKey}`
-
-    const res = await fetch(`${config.endpoint}/audio/speech`, {
+    const res = await fetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
+      signal: controller.signal,
     })
-
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => '')
-      throw new Error(`TTS error (${res.status}): ${errBody || res.statusText}`)
-    }
-
-    const blob = await res.blob()
-    url = URL.createObjectURL(blob)
-    currentBlobUrl = url
-    audioEl = new Audio(url)
-    audioEl.playbackRate = Math.max(0.1, Math.min(10, config.rate))
-    await audioEl.play()
+    await playResponse(res, config, token)
   } catch (err) {
-    if (url && currentBlobUrl === url) {
-      URL.revokeObjectURL(url)
-      currentBlobUrl = null
-    }
+    if (controller.signal.aborted) return
     throw err
+  } finally {
+    if (currentController === controller) currentController = null
   }
 }
 
@@ -103,13 +77,19 @@ export async function speakExternal(text: string, config: TTSConfig): Promise<vo
   }
 
   if (config.apiKey) {
-    return fetchAndPlayDirect(body, config)
+    return fetchAndPlayExternal(`${config.endpoint}/audio/speech`, {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey}`,
+    }, body, config)
   }
-  return fetchAndPlay(body, config)
+  return fetchAndPlayExternal('/api/proxy/tts', { 'Content-Type': 'application/json', ...proxyAuthHeaders() }, body, config)
 }
 
 export function stopSpeaking(): void {
   window.speechSynthesis.cancel()
+  ttsToken++
+  currentController?.abort()
+  currentController = null
   if (audioEl) {
     audioEl.pause()
     audioEl = null
