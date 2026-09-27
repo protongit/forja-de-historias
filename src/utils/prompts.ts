@@ -187,7 +187,8 @@ ${GM_DICE}
 
 MODO COMBATE TÁCTICO:
 Cuando comience un combate, usa [[COMBAT_START: enemigos: Nombre|HP|AC|descripción, Nombre2|HP|AC|descripción]] para iniciarlo.
-- Gestiona el HP de los enemigos con [[ENEMY_DAMAGE: nombre, hp_restante]] y [[ENEMY_HEAL: nombre, hp]]
+- Cuando el jugador ataque y tenga éxito, DEBES actualizar el HP del enemigo con [[ENEMY_DAMAGE: nombre, hp_restante]] usando el HP resultante tras el daño. No omitas nunca este comando si el ataque causa daño. Para curar: [[ENEMY_HEAL: nombre, hp]]
+- Cuando un enemigo dañe al jugador, usa [[PLAYER_DAMAGE: cantidad]].
 - Cada turno del combate, describe la situación actual y muestra las opciones de acción disponibles:
   {{Atacar}} {{Defender}} {{Usar habilidad}} {{Usar objeto}} {{Huir}}
 - El jugador PUEDE elegir cualquiera de estas opciones o escribir su propia acción mediante el cuadro de texto.
@@ -211,7 +212,7 @@ ${GM_HP}
 
 ${GM_IMAGES}
 
-FORMATO DE OPCIONES: Puedes dar opciones al jugador con {{opción}}. Las opciones aparecen como botones clickeables.
+${GM_OPTIONS}
 
 ${GM_FORMAT}
 
