@@ -1,5 +1,45 @@
 import type { GameState, GameAction } from '../../types/game'
 
+function normalizeName(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .trim()
+}
+
+// Resuelve una entidad por nombre tolerando variaciones del modelo:
+// exacto → contiene → solapamiento de tokens → único elemento.
+function resolveByName<T extends { name: string }>(items: T[], name: string): T | undefined {
+  const target = normalizeName(name)
+  if (!target) return undefined
+
+  const exact = items.find((i) => normalizeName(i.name) === target)
+  if (exact) return exact
+
+  const contains = items.find((i) => {
+    const n = normalizeName(i.name)
+    return n.includes(target) || target.includes(n)
+  })
+  if (contains) return contains
+
+  const targetTokens = target.split(/\s+/).filter((t) => t.length >= 3)
+  if (targetTokens.length > 0) {
+    let best: { item: T; score: number } | undefined
+    for (const item of items) {
+      const tokens = new Set(normalizeName(item.name).split(/\s+/).filter((t) => t.length >= 3))
+      let score = 0
+      for (const t of targetTokens) if (tokens.has(t)) score++
+      if (score > 0 && (!best || score > best.score)) best = { item, score }
+    }
+    if (best) return best.item
+  }
+
+  if (items.length === 1) return items[0]
+  return undefined
+}
+
 export function combatReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'SET_COMBAT_MODE':
@@ -11,10 +51,12 @@ export function combatReducer(state: GameState, action: GameAction): GameState {
     case 'SET_ENEMIES':
       return { ...state, enemies: action.enemies }
     case 'UPDATE_ENEMY': {
+      const target = resolveByName(state.enemies, action.name)
+      if (!target) return state
       return {
         ...state,
         enemies: state.enemies.map((e) =>
-          e.name === action.name ? { ...e, ...action.updates } : e
+          e === target ? { ...e, ...action.updates } : e
         ),
       }
     }
