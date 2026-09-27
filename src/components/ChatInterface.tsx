@@ -194,8 +194,9 @@ export default function ChatInterface({ quickSetupAnswers, onQuickSetupConsumed 
             <Message
               message={msg}
               isLoading={msg === lastMsg && lastIsGmSlot && msg.content === ''}
+              optionsDisabled={state.isWaitingAI}
               onSelectOption={
-                state.phase !== 'completed' && !state.isWaitingAI && msg.sender === 'gm'
+                state.phase !== 'completed' && msg.sender === 'gm'
                   ? (opt) => chatInputRef.current?.sendMessage(opt)
                   : undefined
               }

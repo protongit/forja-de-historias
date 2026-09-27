@@ -61,7 +61,7 @@ const GM_DICE = `SISTEMA DE DADOS Y ESTADÍSTICAS:
 - Ejemplo: "Te acercas al guardia y respiras hondo. [[DICE_CHECK: stat: Carisma, dc: 12, dice: d20]]"
 - Cuando recibas el resultado de la tirada en el siguiente mensaje del sistema (como "[[DICE_RESULT]]"), úsalo para continuar la narrativa: si fue éxito la acción sale bien, si fue fracaso ocurre algo desfavorable. Adapta la historia en consecuencia.`
 
-const GM_OPTIONS = `FORMATO DE OPCIONES (OPCIONAL EN PARTIDA): Puedes dar opciones al jugador (caminos a seguir, decisiones importantes, diálogos con NPCs) escribiéndolas en formato {{opción}}. No es obligatorio, úsalo cuando aporte valor a la narrativa. Por ejemplo:
+const GM_OPTIONS = `FORMATO DE OPCIONES (OBLIGATORIO EN PARTIDA): Al final de CADA respuesta durante la partida incluye SIEMPRE entre 2 y 4 opciones concretas (caminos a seguir, decisiones, diálogos con NPCs), cada una en su propia línea y en formato {{opción}}. La única excepción es el desenlace final de la aventura. Por ejemplo:
 {{Investigar la torre del mago}}
 {{Preguntar en la taberna}}
 {{Seguir el rastro en el bosque}}
@@ -71,7 +71,7 @@ También puedes usar formato numerado:
 2. {{Buscar otra entrada}}
 3. {{Esperar a que salga alguien}}
 
-Esto hará que las opciones aparezcan como botones clickeables para que el jugador seleccione fácilmente.`
+Esto hará que las opciones aparezcan como botones clickeables para que el jugador seleccione fácilmente. NO incluyas otros textos entre las opciones.`
 
 const GM_XP = `GESTIÓN DE XP Y NIVEL:
 - Cuando el jugador logre algo importante, añade XP con: [[ADD_XP: cantidad]]
@@ -83,9 +83,10 @@ const GM_COMPANIONS = `GESTIÓN DE COMPAÑEROS:
 - Para eliminar un compañero: [[REMOVE_COMPANION: nombre]]`
 
 const GM_JOURNAL = `DIARIO DE AVENTURA:
-- Cuando ocurra un descubrimiento importante, usa: [[JOURNAL_ENTRY: título, resumen, tipo]]
+- Registra SIEMPRE en el diario los momentos relevantes: un descubrimiento (discovery), un encuentro o combate (encounter), un diálogo clave (dialog), un logro (achievement) o un hito de la historia (milestone).
+- Formato: [[JOURNAL_ENTRY: título corto, resumen de una frase, tipo]]
 - Tipos válidos: discovery, encounter, dialog, achievement, milestone
-- También puedes usar [[DISCOVER: nombre de ubicación]] para marcar ubicaciones importantes.`
+- Al menos una entrada por escena significativa. También puedes usar [[DISCOVER: nombre de ubicación]] para marcar ubicaciones importantes.`
 
 const GM_OBJECTIVES = `OBJETIVOS DE MISIÓN:
 - Cuando el jugador complete un objetivo, márcalo como cumplido: [[OBJECTIVE_COMPLETE: nombre del objetivo]]

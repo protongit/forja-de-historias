@@ -8,6 +8,7 @@ interface Props {
   isLoading?: boolean
   onSelectOption?: (opt: string) => void
   onSpeak?: (text: string) => void
+  optionsDisabled?: boolean
 }
 
 function formatRelativeTime(ts: number): string {
@@ -149,7 +150,7 @@ function RPGLoadingIndicator() {
   )
 }
 
-export default function Message({ message, isLoading, onSelectOption, onSpeak }: Props) {
+export default function Message({ message, isLoading, onSelectOption, onSpeak, optionsDisabled }: Props) {
   const isPlayer = message.sender === 'player'
   const isSystem = message.sender === 'system'
   const isGM = message.sender === 'gm' && !isSystem
@@ -179,7 +180,7 @@ export default function Message({ message, isLoading, onSelectOption, onSpeak }:
         ) : (
           <>
             {isGM && onSelectOption ? (
-              <ClickableContent text={message.content} onSelect={onSelectOption} />
+              <ClickableContent text={message.content} onSelect={onSelectOption} disabled={optionsDisabled} />
             ) : isPlayer ? (
               message.content
             ) : (
@@ -211,19 +212,19 @@ function MarkdownContent({ text }: { text: string }) {
   )
 }
 
-function ClickableContent({ text, onSelect }: { text: string; onSelect: (opt: string) => void }) {
+function ClickableContent({ text, onSelect, disabled }: { text: string; onSelect: (opt: string) => void; disabled?: boolean }) {
   const options = extractOptions(text)
   const parts = renderContent(text)
   const [clickedKey, setClickedKey] = useState<number | null>(null)
 
   const handleSelect = useCallback((value: string, key: number) => {
-    if (clickedKey !== null) return
+    if (clickedKey !== null || disabled) return
     setClickedKey(key)
     setTimeout(() => {
       setClickedKey(null)
       onSelect(value)
     }, 200)
-  }, [clickedKey, onSelect])
+  }, [clickedKey, disabled, onSelect])
 
   if (options.length === 0) {
     return <MarkdownContent text={text} />
@@ -238,11 +239,11 @@ function ClickableContent({ text, onSelect }: { text: string; onSelect: (opt: st
           <button
             key={p.key}
             onClick={() => handleSelect(p.value, p.key)}
-            disabled={clickedKey !== null}
+            disabled={clickedKey !== null || disabled}
             className={`block w-full text-left mt-1.5 px-3 py-2 rounded-lg text-sm transition cursor-pointer ${
               clickedKey === p.key
                 ? 'bg-indigo-600 text-white border border-indigo-400 scale-[0.97]'
-                : clickedKey !== null
+                : clickedKey !== null || disabled
                   ? 'bg-indigo-900/20 text-indigo-400/50 border border-indigo-500/20 cursor-default'
                   : 'bg-indigo-900/40 hover:bg-indigo-700/60 border border-indigo-500/40 hover:border-indigo-400 text-indigo-200 hover:text-white'
             }`}

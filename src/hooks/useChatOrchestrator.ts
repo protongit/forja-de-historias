@@ -279,7 +279,9 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
       }
 
       if (messageId) {
-        await handlePendingImages(result, state.imageConfig, messageId, dispatch, transition, result.cleaned, state)
+        // No bloqueamos el turno esperando las imágenes: se generan en segundo
+        // plano (con su toast) y se adjuntan al mensaje cuando estén listas.
+        void handlePendingImages(result, state.imageConfig, messageId, dispatch, transition, result.cleaned, state)
       }
 
       if (currentPhase === 'playing' && messageId) {
@@ -369,7 +371,7 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
 
       const { transition, messageId } = dispatchPhaseTransition(aiResponse, result, dispatch, placeholderId)
       if (messageId) {
-        await handlePendingImages(result, state.imageConfig, messageId, dispatch, transition, result.cleaned, state)
+        void handlePendingImages(result, state.imageConfig, messageId, dispatch, transition, result.cleaned, state)
       }
     } catch (err) {
       if (controller.signal.aborted) {
@@ -515,7 +517,7 @@ export function useChatOrchestrator({ quickSetupAnswers, onQuickSetupConsumed }:
         dispatch({ type: 'TTS_SET_EMOTION', emotion: toneEmotion as TTSVoiceEmotion })
       }
 
-      await handlePendingImages(result, state.imageConfig, msgId, dispatch, 'generation-complete', result.cleaned, state)
+      void handlePendingImages(result, state.imageConfig, msgId, dispatch, 'generation-complete', result.cleaned, state)
     } catch (err) {
       if (controller.signal.aborted) {
         dispatch({
